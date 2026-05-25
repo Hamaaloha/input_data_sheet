@@ -113,8 +113,10 @@ td.ocr-warn{background:#fff8e0!important;}
     <div class="data-toolbar">
       <button class="btn btn-green" onclick="showNameModal()">📋 名前を一括入力</button>
       <button class="btn btn-teal" id="ocrBtn" onclick="startOCR()">🔍 OCRで数値読み取り</button>
-      <button class="btn btn-navy" onclick="exportMD()">📄 MD</button>
-      <button class="btn btn-orange" onclick="exportCSV()">📥 CSV</button>
+      <button class="btn btn-navy" onclick="exportMD()">📄 MD出力</button>
+      <button class="btn btn-orange" onclick="exportCSV()">📥 CSV出力</button>
+      <button class="btn btn-teal" onclick="document.getElementById('importInput').click()">📂 CSV/MD読込</button>
+      <input type="file" id="importInput" accept=".csv,.md,.txt" style="display:none" onchange="importFile(this)">
       <button class="btn btn-gray" onclick="clearTable()">🗑 クリア</button>
       <span class="status-bar" id="rowCount"></span>
     </div>
@@ -182,32 +184,32 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 // ===== シート定義 =====
 const SHEETS = {
   sprint30:{title:'30m走 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
-    {k:'t1_10',label:'①10m(s)',t:'num',w:62},{k:'t1_20',label:'①20m(s)',t:'num',w:62},{k:'t1_30',label:'①30m(s)',t:'num',w:62},
-    {k:'t2_10',label:'②10m(s)',t:'num',w:62},{k:'t2_20',label:'②20m(s)',t:'num',w:62},{k:'t2_30',label:'②30m(s)',t:'num',w:62},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'t1_10',label:'①10m(s)',t:'stime',w:62},{k:'t1_20',label:'①20m(s)',t:'stime',w:62},{k:'t1_30',label:'①30m(s)',t:'stime',w:62},
+    {k:'t2_10',label:'②10m(s)',t:'stime',w:62},{k:'t2_20',label:'②20m(s)',t:'stime',w:62},{k:'t2_30',label:'②30m(s)',t:'stime',w:62},
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   mb:{title:'メディシンボール投げ 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
     {k:'t1',label:'①(m)',t:'num',w:62},{k:'t2',label:'②(m)',t:'num',w:62},{k:'t3',label:'③予備(m)',t:'num',w:68},
     {k:'adopt',label:'採用',t:'a123',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   cmj:{title:'CMJ 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
     {k:'h1',label:'①跳躍高',t:'num',w:68},{k:'ft1',label:'①滞空時間',t:'num',w:72},
     {k:'h2',label:'②跳躍高',t:'num',w:68},{k:'ft2',label:'②滞空時間',t:'num',w:72},
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   rj:{title:'リバウンドジャンプ(RJ) 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
     {k:'h1',label:'①跳躍高',t:'num',w:68},{k:'rsi1',label:'①RSI',t:'num',w:58},
     {k:'h2',label:'②跳躍高',t:'num',w:68},{k:'rsi2',label:'②RSI',t:'num',w:58},
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   grip:{title:'握力 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
     {k:'r1',label:'右①(kg)',t:'num',w:62},{k:'r2',label:'右②(kg)',t:'num',w:62},
     {k:'l1',label:'左①(kg)',t:'num',w:62},{k:'l2',label:'左②(kg)',t:'num',w:62},
     {k:'adoptR',label:'採用(右)',t:'a12',w:52},{k:'adoptL',label:'採用(左)',t:'a12',w:52},
     {k:'note',label:'備考',t:'text',w:80}]},
   back:{title:'背筋力 測定評価シート',cols:[
-    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
     {k:'t1',label:'①(kg)',t:'num',w:62},{k:'t2',label:'②(kg)',t:'num',w:62},
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]}
 };
@@ -242,7 +244,15 @@ function cellHTML(type,row,col,ci){
     case 'sex':  return `<select id="${id}" ${d}><option value=""></option><option>男</option><option>女</option></select>`;
     case 'a12':  return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option></select>`;
     case 'a123': return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
+    // 整数3桁入力で小数第二位まで自動変換（例：423 → 4.23）
+    case 'stime': return `<input type="text" id="${id}" ${d} inputmode="numeric" placeholder="0.00" onblur="autoDecimal(this)" style="width:100%">`;
   }
+}
+
+function autoDecimal(el){
+  const v=el.value.replace(/[^\d]/g,'');
+  if(!v){el.value='';return;}
+  el.value=v.length<=2?('0.'+v.padStart(2,'0')):(parseInt(v.slice(0,-2),10)+'.'+v.slice(-2));
 }
 
 function getVal(type,row,key){ const el=document.getElementById(`${type}_${row}_${key}`); return el?el.value.replace(',','.'):'';}
@@ -250,7 +260,7 @@ function setVal(type,row,key,val){ const el=document.getElementById(`${type}_${r
 
 function updateRowCount(){
   const type=document.getElementById('sheetType').value;
-  let n=0; for(let i=1;i<=ROWS;i++) if(getVal(type,i,'name').trim()) n++;
+  let n=0; for(let i=1;i<=ROWS;i++) if(getVal(type,i,'sei').trim()||getVal(type,i,'mei').trim()) n++;
   document.getElementById('rowCount').textContent=n?`入力済み：${n}名`:'';
 }
 
@@ -339,13 +349,11 @@ function changeZoom(d){
 // ===== 名前一括入力 =====
 function showNameModal(){
   const type=document.getElementById('sheetType').value;
-  // 現状入力済みの氏名・学年・性別をテキストエリアに反映
   const lines=[];
   for(let i=1;i<=ROWS;i++){
-    const name=getVal(type,i,'name');
-    const grade=getVal(type,i,'grade');
-    const sex=getVal(type,i,'sex');
-    if(name||grade||sex) lines.push([name,grade,sex].join('\t'));
+    const sei=getVal(type,i,'sei'), mei=getVal(type,i,'mei');
+    const grade=getVal(type,i,'grade'), sex=getVal(type,i,'sex');
+    if(sei||mei||grade||sex) lines.push([sei,mei,grade,sex].join('\t'));
   }
   document.getElementById('namePasteText').value=lines.join('\n');
   document.getElementById('nameModal').classList.add('show');
@@ -356,32 +364,136 @@ function closeNameModal(){ document.getElementById('nameModal').classList.remove
 function applyNamePaste(){
   const type=document.getElementById('sheetType').value;
   const lines=document.getElementById('namePasteText').value.split('\n').filter(l=>l.trim());
+  const isGrade=s=>/^[1-4]年?$/.test(s.trim());
+  const isSex  =s=>/^[男女]/.test(s.trim());
   lines.forEach((line,i)=>{
     const row=i+1; if(row>ROWS) return;
-    // Tab区切り（Excel）優先、なければ2スペース区切り、それも1列なら1スペース区切り
     let parts=line.split('\t');
     if(parts.length===1) parts=line.trim().split(/\s{2,}/);
     if(parts.length===1) parts=line.trim().split(/\s+/);
-    const name=(parts[0]||'').trim();
-    const grade=(parts[1]||'').trim();
-    const sex=(parts[2]||'').trim();
-    if(name) setVal(type,row,'name',name);
-    if(grade){
-      const gradeEl=document.getElementById(`${type}_${row}_grade`);
-      if(gradeEl){
-        // '4年'でも'4'でも対応
-        const normalized=grade.includes('年')?grade:grade+'年';
-        gradeEl.value=normalized;
-      }
+    let sei='',mei='',gradeStr='',sexStr='';
+    // 姓・名が既に2列に分かれている場合とそうでない場合を判定
+    if(parts.length>=2 && !isGrade(parts[1]) && !isSex(parts[1])){
+      sei=parts[0]; mei=parts[1]; gradeStr=parts[2]||''; sexStr=parts[3]||'';
+    } else if(parts[0].includes(' ')){
+      // 「山田 太郎」形式 → スペースで姓名に分割
+      const sp=parts[0].trim().indexOf(' ');
+      sei=parts[0].slice(0,sp); mei=parts[0].slice(sp+1);
+      gradeStr=parts[1]||''; sexStr=parts[2]||'';
+    } else {
+      sei=parts[0]; gradeStr=parts[1]||''; sexStr=parts[2]||'';
     }
-    if(sex){
-      const sexEl=document.getElementById(`${type}_${row}_sex`);
-      if(sexEl) sexEl.value=sex==='女性'?'女':sex==='男性'?'男':sex;
+    if(sei) setVal(type,row,'sei',sei.trim());
+    if(mei) setVal(type,row,'mei',mei.trim());
+    if(gradeStr){
+      const el=document.getElementById(`${type}_${row}_grade`);
+      if(el){const n=gradeStr.trim(); el.value=n.includes('年')?n:n+'年';}
+    }
+    if(sexStr){
+      const el=document.getElementById(`${type}_${row}_sex`);
+      if(el) el.value=sexStr==='女性'?'女':sexStr==='男性'?'男':sexStr.trim();
     }
   });
   closeNameModal();
   updateRowCount();
   document.getElementById('namePasteText').value='';
+}
+
+// ===== CSV/MD インポート =====
+function importFile(input){
+  const file=input.files[0]; if(!file) return;
+  input.value='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    if(file.name.endsWith('.csv')){
+      importCSV(text);
+    } else {
+      importMD(text);
+    }
+  };
+  reader.readAsText(file,'UTF-8');
+}
+
+function importCSV(text){
+  const type=document.getElementById('sheetType').value;
+  const cols=SHEETS[type].cols;
+  const labelToKey={};
+  cols.forEach(c=>{ labelToKey[c.label]=c.k; });
+  labelToKey['No.']=null;
+
+  // CSVパース（クォート対応）
+  const rows=[];
+  let cur='',inQ=false,row=[];
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(ch==='"'){ if(inQ&&text[i+1]==='"'){cur+='"';i++;} else inQ=!inQ; }
+    else if(ch===','&&!inQ){ row.push(cur);cur=''; }
+    else if((ch==='\n'||ch==='\r')&&!inQ){ row.push(cur);cur=''; if(row.some(c=>c.trim())) rows.push(row); row=[]; if(ch==='\r'&&text[i+1]==='\n') i++; }
+    else cur+=ch;
+  }
+  if(cur||row.length) rows.push([...row,cur]);
+
+  if(rows.length<2){alert('データが見つかりません');return;}
+  const headers=rows[0].map(h=>h.trim().replace(/^﻿/,''));
+  const colMap=headers.map(h=>labelToKey.hasOwnProperty(h)?labelToKey[h]:undefined);
+
+  let filled=0;
+  rows.slice(1).forEach((cells,ri)=>{
+    const row=ri+1; if(row>ROWS) return;
+    cells.forEach((val,ci)=>{
+      const key=colMap[ci]; if(!key) return;
+      const el=document.getElementById(`${type}_${row}_${key}`); if(!el) return;
+      const v=val.trim();
+      if(!v) return;
+      if(el.tagName==='SELECT'){
+        if(key==='grade') el.value=v.includes('年')?v:v+'年';
+        else if(key==='sex') el.value=v==='女性'?'女':v==='男性'?'男':v;
+        else el.value=v;
+      } else {
+        el.value=v;
+      }
+    });
+    filled++;
+  });
+  updateRowCount();
+  alert(`${filled}行を読み込みました`);
+}
+
+function importMD(text){
+  const type=document.getElementById('sheetType').value;
+  const cols=SHEETS[type].cols;
+  const labelToKey={};
+  cols.forEach(c=>{ labelToKey[c.label]=c.k; });
+
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.startsWith('|'));
+  if(lines.length<3){alert('Markdownテーブルが見つかりません');return;}
+
+  const parseRow=l=>l.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+  const headers=parseRow(lines[0]);
+  const colMap=headers.map(h=>labelToKey.hasOwnProperty(h)?labelToKey[h]:undefined);
+
+  const dataLines=lines.slice(2); // skip header and separator
+  let filled=0;
+  dataLines.forEach((line,ri)=>{
+    const row=ri+1; if(row>ROWS) return;
+    const cells=parseRow(line);
+    cells.forEach((val,ci)=>{
+      const key=colMap[ci]; if(!key) return;
+      const el=document.getElementById(`${type}_${row}_${key}`); if(!el) return;
+      const v=val.trim(); if(!v||v==='—') return;
+      if(el.tagName==='SELECT'){
+        if(key==='grade') el.value=v.includes('年')?v:v+'年';
+        else if(key==='sex') el.value=v==='女性'?'女':v==='男性'?'男':v;
+        else el.value=v;
+      } else {
+        el.value=v;
+      }
+    });
+    filled++;
+  });
+  updateRowCount();
+  alert(`${filled}行を読み込みました`);
 }
 
 // ===== OCR =====
