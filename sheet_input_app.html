@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>測定評価シート データ入力</title>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<style>
+:root{--navy:#0D1B33;--accent:#00B4D8;--teal:#03C49D;--orange:#D97310;--red:#BF1A1A;--green:#00A66E;--bg:#F1F1F1;--card:#fff;--muted:#595959;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Yu Gothic','Meiryo',sans-serif;background:var(--bg);color:#1a1a2e;font-size:13px;}
+header{background:var(--navy);color:#fff;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+header h1{font-size:1em;font-weight:700;}
+.controls{background:#fff;border-bottom:2px solid var(--accent);padding:8px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.controls label{font-size:.82em;color:var(--muted);}
+.controls select,.controls input[type=text],.controls input[type=date]{padding:5px 8px;border:1px solid #ccc;border-radius:5px;font-family:inherit;font-size:.88em;}
+#sheetType{font-weight:bold;color:var(--navy);border-color:var(--accent);}
+.btn{padding:6px 14px;border:none;border-radius:5px;cursor:pointer;font-family:inherit;font-size:.82em;font-weight:bold;}
+.btn-navy{background:var(--navy);color:#fff;} .btn-navy:hover{background:#1a2e52;}
+.btn-teal{background:var(--teal);color:#fff;} .btn-teal:hover{background:#02a082;}
+.btn-orange{background:var(--orange);color:#fff;} .btn-orange:hover{background:#b85e00;}
+.btn-gray{background:#ddd;color:#333;} .btn-gray:hover{background:#ccc;}
+.btn-green{background:var(--green);color:#fff;} .btn-green:hover{background:#008c5a;}
+.layout{display:flex;height:calc(100vh - 108px);overflow:hidden;}
+.pdf-pane{width:400px;flex-shrink:0;border-right:2px solid #ddd;display:flex;flex-direction:column;background:#555;}
+.pdf-toolbar{background:#333;color:#fff;padding:5px 8px;display:flex;gap:6px;align-items:center;font-size:.8em;flex-wrap:wrap;}
+.pdf-toolbar button{padding:2px 8px;background:#555;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-size:.88em;}
+.pdf-scroll{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:8px;}
+#pdfCanvas{max-width:100%;box-shadow:0 2px 12px rgba(0,0,0,.5);}
+#imgView{max-width:100%;box-shadow:0 2px 12px rgba(0,0,0,.5);}
+.pdf-placeholder{color:#aaa;text-align:center;padding:40px 16px;font-size:.88em;line-height:2.2;}
+.data-pane{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.data-toolbar{padding:7px 10px;background:#f0f4f8;border-bottom:1px solid #ddd;display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.table-scroll{flex:1;overflow:auto;padding:8px;}
+table{border-collapse:collapse;white-space:nowrap;}
+th{background:var(--navy);color:#fff;padding:5px 7px;text-align:center;font-size:.8em;position:sticky;top:0;z-index:2;}
+td{border:1px solid #ddd;padding:2px 3px;background:#fff;}
+tr:nth-child(even) td{background:#f8fbff;}
+td.no-cell{text-align:center;color:var(--muted);font-size:.78em;background:#eef2f8!important;width:34px;}
+input[type=text],input[type=number]{width:100%;border:none;background:transparent;font-family:inherit;font-size:.86em;padding:3px 4px;outline:none;}
+input[type=text]:focus,input[type=number]:focus{background:#e0f4ff;}
+select{width:100%;border:none;background:transparent;font-family:inherit;font-size:.82em;padding:2px;outline:none;cursor:pointer;}
+select:focus{background:#e0f4ff;}
+td.ocr-filled{background:#e6fff4!important;}
+td.ocr-warn{background:#fff8e0!important;}
+.status-bar{font-size:.78em;color:var(--muted);}
+
+/* モーダル共通 */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:10px;padding:24px;max-width:560px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3);}
+.modal-box h2{font-size:1em;color:var(--navy);margin-bottom:10px;border-bottom:2px solid var(--accent);padding-bottom:6px;}
+.modal-box p{font-size:.84em;color:var(--muted);margin-bottom:10px;line-height:1.7;}
+.modal-box textarea{width:100%;height:200px;border:1px solid #ccc;border-radius:6px;padding:8px;font-family:'Yu Gothic','Meiryo',sans-serif;font-size:.88em;resize:vertical;}
+.modal-actions{display:flex;gap:10px;margin-top:14px;justify-content:flex-end;}
+
+/* OCR進捗モーダル */
+#ocrModal .modal-box{max-width:420px;}
+.progress-wrap{background:#eee;border-radius:6px;height:14px;overflow:hidden;margin:10px 0;}
+.progress-fill{height:100%;background:var(--accent);border-radius:6px;transition:width .3s;}
+#ocrLog{font-size:.8em;color:var(--muted);height:80px;overflow-y:auto;background:#f5f5f5;padding:6px;border-radius:4px;margin-top:6px;}
+
+@media(max-width:900px){.layout{flex-direction:column;height:auto;}.pdf-pane{width:100%;height:45vh;}.data-pane{height:55vh;}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 測定評価シート データ入力アプリ</h1>
+</header>
+
+<div class="controls">
+  <div><label>種目　</label>
+    <select id="sheetType" onchange="changeSheet()">
+      <option value="sprint30">30m走</option>
+      <option value="mb">メディシンボール投げ</option>
+      <option value="cmj">CMJ</option>
+      <option value="rj">リバウンドジャンプ (RJ)</option>
+      <option value="grip">握力</option>
+      <option value="back">背筋力</option>
+    </select>
+  </div>
+  <div><label>測定日　</label><input type="date" id="measDate"></div>
+  <div><label>測定者　</label><input type="text" id="measPerson" placeholder="氏名" style="width:90px"></div>
+  <button class="btn btn-navy" onclick="document.getElementById('fileInput').click()">📂 スキャンを開く</button>
+  <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="loadFile(this)">
+  <span class="status-bar" id="fileStatus">ファイル未選択</span>
+</div>
+
+<div class="layout">
+  <!-- PDF / 画像 -->
+  <div class="pdf-pane">
+    <div class="pdf-toolbar">
+      <span id="pageInfo">—</span>
+      <button onclick="changePage(-1)">◀</button>
+      <button onclick="changePage(1)">▶</button>
+      <button onclick="changeZoom(-0.25)">縮小</button>
+      <button onclick="changeZoom(0.25)">拡大</button>
+    </div>
+    <div class="pdf-scroll" id="pdfScroll">
+      <div class="pdf-placeholder" id="pdfPlaceholder">
+        「スキャンを開く」から<br>PDF または 画像を選択
+      </div>
+      <canvas id="pdfCanvas" style="display:none"></canvas>
+      <img id="imgView" style="display:none">
+    </div>
+  </div>
+
+  <!-- データ入力 -->
+  <div class="data-pane">
+    <div class="data-toolbar">
+      <button class="btn btn-green" onclick="showNameModal()">📋 名前を一括入力</button>
+      <button class="btn btn-teal" id="ocrBtn" onclick="startOCR()">🔍 OCRで数値読み取り</button>
+      <button class="btn btn-navy" onclick="exportMD()">📄 MD</button>
+      <button class="btn btn-orange" onclick="exportCSV()">📥 CSV</button>
+      <button class="btn btn-gray" onclick="clearTable()">🗑 クリア</button>
+      <span class="status-bar" id="rowCount"></span>
+    </div>
+    <div class="table-scroll">
+      <table id="dataTable"></table>
+    </div>
+  </div>
+</div>
+
+<!-- 名前一括入力モーダル -->
+<div class="modal-overlay" id="nameModal">
+  <div class="modal-box">
+    <h2>📋 名前を一括入力</h2>
+    <p>
+      1行に1名を入力してください。<br>
+      <strong>Excelからのコピペ推奨：</strong>氏名・学年・性別の列を選択してコピーすると<br>
+      タブ区切りで自動的に3列に振り分けられます。<br>
+      <span style="color:#888">例：山田 太郎[Tab]4年[Tab]男</span>
+    </p>
+    <textarea id="namePasteText" placeholder="氏名のみ（1行1名）
+または
+山田 太郎&#9;4年&#9;男
+鈴木 花子&#9;2年&#9;女
+…"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeNameModal()">キャンセル</button>
+      <button class="btn btn-teal" onclick="applyNamePaste()">✓ 適用</button>
+    </div>
+  </div>
+</div>
+
+<!-- OCR進捗モーダル -->
+<div class="modal-overlay" id="ocrModal">
+  <div class="modal-box">
+    <h2>🔍 OCR実行中</h2>
+    <p id="ocrStatusText">Tesseract.js を読み込み中...</p>
+    <div class="progress-wrap"><div class="progress-fill" id="ocrProgress" style="width:0%"></div></div>
+    <div id="ocrLog"></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" id="ocrCancelBtn" onclick="closeOcrModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- OCR結果プレビューモーダル -->
+<div class="modal-overlay" id="ocrPreviewModal">
+  <div class="modal-box" style="max-width:700px;width:95%">
+    <h2>🔍 OCR読み取り結果の確認</h2>
+    <p>読み取った数値を確認して「適用」してください。<br>
+    <span style="color:#888;font-size:.82em">緑：読み取り成功　黄：要確認（数値の個数が合わない行）</span></p>
+    <div style="max-height:320px;overflow-y:auto">
+      <table id="previewTable" style="font-size:.82em;width:100%">
+        <thead id="previewThead"></thead>
+        <tbody id="previewTbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="document.getElementById('ocrPreviewModal').classList.remove('show')">キャンセル</button>
+      <button class="btn btn-green" onclick="applyOCRResult()">✓ 適用する</button>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+// ===== シート定義 =====
+const SHEETS = {
+  sprint30:{title:'30m走 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'t1_10',label:'①10m(s)',t:'num',w:62},{k:'t1_20',label:'①20m(s)',t:'num',w:62},{k:'t1_30',label:'①30m(s)',t:'num',w:62},
+    {k:'t2_10',label:'②10m(s)',t:'num',w:62},{k:'t2_20',label:'②20m(s)',t:'num',w:62},{k:'t2_30',label:'②30m(s)',t:'num',w:62},
+    {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
+  mb:{title:'メディシンボール投げ 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'t1',label:'①(m)',t:'num',w:62},{k:'t2',label:'②(m)',t:'num',w:62},{k:'t3',label:'③予備(m)',t:'num',w:68},
+    {k:'adopt',label:'採用',t:'a123',w:44},{k:'note',label:'備考',t:'text',w:80}]},
+  cmj:{title:'CMJ 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'h1',label:'①跳躍高',t:'num',w:68},{k:'ft1',label:'①滞空時間',t:'num',w:72},
+    {k:'h2',label:'②跳躍高',t:'num',w:68},{k:'ft2',label:'②滞空時間',t:'num',w:72},
+    {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
+  rj:{title:'リバウンドジャンプ(RJ) 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'h1',label:'①跳躍高',t:'num',w:68},{k:'rsi1',label:'①RSI',t:'num',w:58},
+    {k:'h2',label:'②跳躍高',t:'num',w:68},{k:'rsi2',label:'②RSI',t:'num',w:58},
+    {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
+  grip:{title:'握力 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'r1',label:'右①(kg)',t:'num',w:62},{k:'r2',label:'右②(kg)',t:'num',w:62},
+    {k:'l1',label:'左①(kg)',t:'num',w:62},{k:'l2',label:'左②(kg)',t:'num',w:62},
+    {k:'adoptR',label:'採用(右)',t:'a12',w:52},{k:'adoptL',label:'採用(左)',t:'a12',w:52},
+    {k:'note',label:'備考',t:'text',w:80}]},
+  back:{title:'背筋力 測定評価シート',cols:[
+    {k:'name',label:'氏名',t:'text',w:90},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
+    {k:'t1',label:'①(kg)',t:'num',w:62},{k:'t2',label:'②(kg)',t:'num',w:62},
+    {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]}
+};
+
+const ROWS = 25;
+let pdfDoc=null, pageNum=1, zoom=1.2, ocrPreviewData=[];
+
+// ===== テーブル =====
+function changeSheet(){ buildTable(document.getElementById('sheetType').value); }
+
+function buildTable(type){
+  const cols = SHEETS[type].cols;
+  let html = '<thead><tr><th style="width:34px">No.</th>';
+  cols.forEach(c=>html+=`<th style="min-width:${c.w}px">${c.label}</th>`);
+  html += '</tr></thead><tbody>';
+  for(let i=1;i<=ROWS;i++){
+    html+=`<tr><td class="no-cell">${i}</td>`;
+    cols.forEach(c=>html+=`<td style="min-width:${c.w}px" id="td_${type}_${i}_${c.k}">${cellHTML(type,i,c)}</td>`);
+    html+='</tr>';
+  }
+  document.getElementById('dataTable').innerHTML=html+'</tbody>';
+  updateRowCount();
+}
+
+function cellHTML(type,row,col){
+  const id=`${type}_${row}_${col.k}`;
+  switch(col.t){
+    case 'text': return `<input type="text" id="${id}" oninput="updateRowCount()">`;
+    case 'num':  return `<input type="number" id="${id}" inputmode="decimal" step="any">`;
+    case 'grade':return `<select id="${id}"><option value=""></option><option>1年</option><option>2年</option><option>3年</option><option>4年</option></select>`;
+    case 'sex':  return `<select id="${id}"><option value=""></option><option>男</option><option>女</option></select>`;
+    case 'a12':  return `<select id="${id}"><option value=""></option><option>①</option><option>②</option></select>`;
+    case 'a123': return `<select id="${id}"><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
+  }
+}
+
+function getVal(type,row,key){ const el=document.getElementById(`${type}_${row}_${key}`); return el?el.value.replace(',','.'):'';}
+function setVal(type,row,key,val){ const el=document.getElementById(`${type}_${row}_${key}`); if(el) el.value=val;}
+
+function updateRowCount(){
+  const type=document.getElementById('sheetType').value;
+  let n=0; for(let i=1;i<=ROWS;i++) if(getVal(type,i,'name').trim()) n++;
+  document.getElementById('rowCount').textContent=n?`入力済み：${n}名`:'';
+}
+
+function clearTable(){ if(!confirm('入力内容をすべてクリアしますか？')) return; buildTable(document.getElementById('sheetType').value);}
+
+// ===== PDF / 画像 =====
+function loadFile(input){
+  const file=input.files[0]; if(!file) return;
+  document.getElementById('fileStatus').textContent=file.name;
+  document.getElementById('pdfPlaceholder').style.display='none';
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){
+    const fr=new FileReader();
+    fr.onload=e=>{
+      pdfjsLib.getDocument({data:e.target.result}).promise.then(pdf=>{
+        pdfDoc=pdf; pageNum=1; renderPage();
+      });
+    };
+    fr.readAsArrayBuffer(file);
+    document.getElementById('imgView').style.display='none';
+  } else {
+    pdfDoc=null;
+    document.getElementById('pdfCanvas').style.display='none';
+    const img=document.getElementById('imgView');
+    img.style.display='block';
+    img.src=URL.createObjectURL(file);
+    document.getElementById('pageInfo').textContent='画像表示中';
+  }
+}
+
+function renderPage(){
+  if(!pdfDoc) return;
+  pdfDoc.getPage(pageNum).then(page=>{
+    const vp=page.getViewport({scale:zoom});
+    const canvas=document.getElementById('pdfCanvas');
+    canvas.style.display='block';
+    canvas.width=vp.width; canvas.height=vp.height;
+    page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
+    document.getElementById('pageInfo').textContent=`${pageNum}/${pdfDoc.numPages}ページ`;
+  });
+}
+function changePage(d){ if(!pdfDoc) return; const n=pageNum+d; if(n<1||n>pdfDoc.numPages) return; pageNum=n; renderPage();}
+function changeZoom(d){ zoom=Math.max(0.5,Math.min(3.0,zoom+d)); if(pdfDoc) renderPage(); else document.getElementById('imgView').style.width=(zoom*380)+'px';}
+
+// ===== 名前一括入力 =====
+function showNameModal(){ document.getElementById('nameModal').classList.add('show'); document.getElementById('namePasteText').focus();}
+function closeNameModal(){ document.getElementById('nameModal').classList.remove('show');}
+
+function applyNamePaste(){
+  const type=document.getElementById('sheetType').value;
+  const lines=document.getElementById('namePasteText').value.split('\n').filter(l=>l.trim());
+  lines.forEach((line,i)=>{
+    const row=i+1; if(row>ROWS) return;
+    const parts=line.split('\t');
+    const name=(parts[0]||'').trim();
+    const grade=(parts[1]||'').trim();
+    const sex=(parts[2]||'').trim();
+    if(name) setVal(type,row,'name',name);
+    if(grade){
+      const gradeEl=document.getElementById(`${type}_${row}_grade`);
+      if(gradeEl){
+        // '4年'でも'4'でも対応
+        const normalized=grade.includes('年')?grade:grade+'年';
+        gradeEl.value=normalized;
+      }
+    }
+    if(sex){
+      const sexEl=document.getElementById(`${type}_${row}_sex`);
+      if(sexEl) sexEl.value=sex==='女性'?'女':sex==='男性'?'男':sex;
+    }
+  });
+  closeNameModal();
+  updateRowCount();
+  document.getElementById('namePasteText').value='';
+}
+
+// ===== OCR =====
+function ocrLog(msg){ const el=document.getElementById('ocrLog'); el.textContent+=msg+'\n'; el.scrollTop=el.scrollHeight;}
+function ocrProgress(pct,msg){ document.getElementById('ocrProgress').style.width=pct+'%'; document.getElementById('ocrStatusText').textContent=msg;}
+function closeOcrModal(){ document.getElementById('ocrModal').classList.remove('show');}
+
+async function startOCR(){
+  const canvas=document.getElementById('pdfCanvas');
+  const img=document.getElementById('imgView');
+  const hasContent=(canvas.style.display!=='none'&&canvas.width>0)||(img.style.display!=='none'&&img.src);
+  if(!hasContent){ alert('先にスキャンPDFまたは画像を開いてください'); return;}
+
+  document.getElementById('ocrModal').classList.add('show');
+  document.getElementById('ocrLog').textContent='';
+  document.getElementById('ocrProgress').style.width='0%';
+  document.getElementById('ocrCancelBtn').textContent='処理中...';
+  document.getElementById('ocrCancelBtn').disabled=true;
+
+  try {
+    ocrProgress(5,'Tesseract.js を読み込み中...');
+    ocrLog('Tesseract.js (eng) を初期化中');
+
+    // Tesseract.js v4 をCDNから動的ロード
+    if(!window.Tesseract){
+      await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js');
+    }
+
+    ocrProgress(15,'言語データを読み込み中...');
+    const worker = await Tesseract.createWorker('eng',1,{
+      logger: m=>{
+        if(m.status==='recognizing text') ocrProgress(15+m.progress*70, `認識中: ${Math.round(m.progress*100)}%`);
+      }
+    });
+
+    ocrProgress(20,'画像を認識中...');
+    ocrLog('OCR開始');
+
+    const source=canvas.style.display!=='none' ? canvas : img;
+    const {data:{lines}} = await worker.recognize(source);
+    await worker.terminate();
+
+    ocrProgress(90,'結果を解析中...');
+    ocrLog(`認識行数: ${lines.length}`);
+
+    const parsed=parseOCRLines(lines);
+    ocrProgress(100,'完了');
+    ocrLog(`データ行検出: ${parsed.length}行`);
+
+    closeOcrModal();
+    document.getElementById('ocrCancelBtn').disabled=false;
+    document.getElementById('ocrCancelBtn').textContent='閉じる';
+
+    if(!parsed.length){ alert('数値データを検出できませんでした。\nスキャンの向きや画質を確認してください。'); return;}
+    showOCRPreview(parsed);
+
+  } catch(e){
+    ocrLog('エラー: '+e.message);
+    ocrProgress(0,'エラーが発生しました');
+    document.getElementById('ocrCancelBtn').disabled=false;
+    document.getElementById('ocrCancelBtn').textContent='閉じる';
+  }
+}
+
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=src; s.onload=resolve; s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+
+function parseOCRLines(lines){
+  const type=document.getElementById('sheetType').value;
+  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  const expected=numCols.length;
+  const results=[];
+
+  // 数値を含む行を抽出（1行に数値が2つ以上）
+  let dataRowIdx=0;
+  for(const line of lines){
+    const text=line.text.trim();
+    if(!text) continue;
+    // 行頭が番号（1〜25）かどうか確認
+    const leadNum=text.match(/^(\d{1,2})\s/);
+    // 小数点付き数値を抽出
+    const nums=text.match(/\d+[.,]\d+/g)||[];
+    // 整数のみも対象（例：背筋力）
+    const allNums=text.match(/\b\d+(?:[.,]\d+)?\b/g)||[];
+    const cleanNums=allNums.map(n=>n.replace(',','.')).filter(n=>parseFloat(n)>0);
+
+    if(cleanNums.length>=1 && cleanNums.length<=expected+2){
+      dataRowIdx++;
+      if(dataRowIdx>ROWS) break;
+      // 行番号を認識できた場合はその番号を使う
+      const rowNum=leadNum?parseInt(leadNum[1]):dataRowIdx;
+      if(rowNum>ROWS) continue;
+      results.push({
+        rowNum,
+        nums: cleanNums.slice(0,expected),
+        rawText: text,
+        ok: cleanNums.length>=expected
+      });
+    }
+  }
+  return results;
+}
+
+function showOCRPreview(parsed){
+  const type=document.getElementById('sheetType').value;
+  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  ocrPreviewData=parsed;
+
+  // ヘッダー
+  let thead='<tr><th>No.</th>';
+  numCols.forEach(c=>thead+=`<th>${c.label}</th>`);
+  thead+='<th>元テキスト</th></tr>';
+  document.getElementById('previewThead').innerHTML=thead;
+
+  // 行
+  let tbody='';
+  parsed.forEach(r=>{
+    const bg=r.ok?'#e6fff4':'#fff8e0';
+    tbody+=`<tr style="background:${bg}"><td style="text-align:center">${r.rowNum}</td>`;
+    numCols.forEach((_,i)=>tbody+=`<td>${r.nums[i]??''}</td>`);
+    tbody+=`<td style="color:#888;font-size:.78em">${r.rawText.substring(0,40)}</td></tr>`;
+  });
+  document.getElementById('previewTbody').innerHTML=tbody;
+  document.getElementById('ocrPreviewModal').classList.add('show');
+}
+
+function applyOCRResult(){
+  const type=document.getElementById('sheetType').value;
+  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  ocrPreviewData.forEach(r=>{
+    numCols.forEach((col,i)=>{
+      if(r.nums[i]!==undefined){
+        setVal(type,r.rowNum,col.k,r.nums[i]);
+        const td=document.getElementById(`td_${type}_${r.rowNum}_${col.k}`);
+        if(td) td.className=r.ok?'ocr-filled':'ocr-warn';
+      }
+    });
+  });
+  document.getElementById('ocrPreviewModal').classList.remove('show');
+}
+
+// ===== エクスポート =====
+function collectData(){
+  const type=document.getElementById('sheetType').value;
+  const sheet=SHEETS[type];
+  const rows=[];
+  for(let i=1;i<=ROWS;i++){
+    const row={no:i};
+    sheet.cols.forEach(c=>{row[c.k]=getVal(type,i,c.k);});
+    if(sheet.cols.some(c=>row[c.k]!=='')) rows.push(row);
+  }
+  return {sheet,rows,type};
+}
+
+function exportMD(){
+  const {sheet,rows}=collectData();
+  const date=document.getElementById('measDate').value||'—';
+  const person=document.getElementById('measPerson').value||'—';
+  const cols=sheet.cols;
+  let md=`# ${sheet.title}\n\n測定日: ${date}　測定者: ${person}\n\n`;
+  md+='| No. |'+cols.map(c=>` ${c.label} |`).join('')+'\n';
+  md+='|-----|'+cols.map(()=>'------|').join('')+'\n';
+  rows.forEach(r=>{ md+=`| ${r.no} |`+cols.map(c=>` ${r[c.k]||''} |`).join('')+'\n'; });
+  if(!rows.length) md+='|（データなし）|\n';
+  _dl(md,`${sheet.title.replace(/\s/g,'_')}_${date}.md`,'text/markdown');
+}
+
+function exportCSV(){
+  const {sheet,rows}=collectData();
+  const date=document.getElementById('measDate').value||'';
+  const cols=sheet.cols;
+  const header=['No.',...cols.map(c=>c.label)];
+  const dataRows=rows.map(r=>[r.no,...cols.map(c=>r[c.k]||'')]);
+  const csv=[header,...dataRows].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  _dl('﻿'+csv,`${sheet.title.replace(/\s/g,'_')}_${date||'nodate'}.csv`,'text/csv;charset=utf-8');
+}
+
+function _dl(content,filename,mime){
+  const blob=new Blob([content],{type:mime});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+}
+
+// ===== 初期化 =====
+document.getElementById('measDate').value=new Date().toISOString().split('T')[0];
+buildTable('sprint30');
+</script>
+</body>
+</html>
