@@ -226,22 +226,23 @@ function buildTable(type){
   html += '</tr></thead><tbody>';
   for(let i=1;i<=ROWS;i++){
     html+=`<tr><td class="no-cell">${i}</td>`;
-    cols.forEach(c=>html+=`<td style="min-width:${c.w}px" id="td_${type}_${i}_${c.k}">${cellHTML(type,i,c)}</td>`);
+    cols.forEach((c,ci)=>html+=`<td style="min-width:${c.w}px" id="td_${type}_${i}_${c.k}">${cellHTML(type,i,c,ci)}</td>`);
     html+='</tr>';
   }
   document.getElementById('dataTable').innerHTML=html+'</tbody>';
   updateRowCount();
 }
 
-function cellHTML(type,row,col){
+function cellHTML(type,row,col,ci){
   const id=`${type}_${row}_${col.k}`;
+  const d=`data-row="${row}" data-ci="${ci}"`;
   switch(col.t){
-    case 'text': return `<input type="text" id="${id}" oninput="updateRowCount()">`;
-    case 'num':  return `<input type="number" id="${id}" inputmode="decimal" step="any">`;
-    case 'grade':return `<select id="${id}"><option value=""></option><option>1年</option><option>2年</option><option>3年</option><option>4年</option></select>`;
-    case 'sex':  return `<select id="${id}"><option value=""></option><option>男</option><option>女</option></select>`;
-    case 'a12':  return `<select id="${id}"><option value=""></option><option>①</option><option>②</option></select>`;
-    case 'a123': return `<select id="${id}"><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
+    case 'text': return `<input type="text" id="${id}" ${d} oninput="updateRowCount()">`;
+    case 'num':  return `<input type="number" id="${id}" ${d} inputmode="decimal" step="any">`;
+    case 'grade':return `<select id="${id}" ${d}><option value=""></option><option>1年</option><option>2年</option><option>3年</option><option>4年</option></select>`;
+    case 'sex':  return `<select id="${id}" ${d}><option value=""></option><option>男</option><option>女</option></select>`;
+    case 'a12':  return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option></select>`;
+    case 'a123': return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
   }
 }
 
@@ -255,6 +256,40 @@ function updateRowCount(){
 }
 
 function clearTable(){ if(!confirm('入力内容をすべてクリアしますか？')) return; buildTable(document.getElementById('sheetType').value);}
+
+// ===== テーブルへの一括ペースト =====
+function handleTablePaste(e){
+  const active=document.activeElement;
+  if(!active||!active.closest('#dataTable')) return;
+  e.preventDefault();
+  const text=e.clipboardData.getData('text');
+  const type=document.getElementById('sheetType').value;
+  const cols=SHEETS[type].cols;
+  const startRow=parseInt(active.dataset.row)||1;
+  const startCi=parseInt(active.dataset.ci)||0;
+
+  // Tab区切り（Excel）またはスペース区切りを自動判定
+  const usesTab=text.includes('\t');
+  text.split('\n').filter(r=>r.trim()).forEach((line,ri)=>{
+    const row=startRow+ri; if(row>ROWS) return;
+    const cells=usesTab ? line.split('\t') : line.trim().split(/\s+/);
+    cells.forEach((val,ci)=>{
+      const colIdx=startCi+ci; if(colIdx>=cols.length) return;
+      const col=cols[colIdx];
+      const el=document.getElementById(`${type}_${row}_${col.k}`);
+      if(!el) return;
+      const v=val.trim();
+      if(col.t==='grade'){
+        el.value=v.includes('年')?v:v+'年';
+      } else if(col.t==='sex'){
+        el.value=v==='女性'?'女':v==='男性'?'男':v;
+      } else {
+        el.value=v.replace(',','.');
+      }
+    });
+  });
+  updateRowCount();
+}
 
 // ===== PDF / 画像 =====
 function loadFile(input){
@@ -293,7 +328,14 @@ function renderPage(){
   });
 }
 function changePage(d){ if(!pdfDoc) return; const n=pageNum+d; if(n<1||n>pdfDoc.numPages) return; pageNum=n; renderPage();}
-function changeZoom(d){ zoom=Math.max(0.5,Math.min(3.0,zoom+d)); if(pdfDoc) renderPage(); else document.getElementById('imgView').style.width=(zoom*380)+'px';}
+function changeZoom(d){
+  zoom=Math.max(0.5,Math.min(3.0,zoom+d));
+  if(pdfDoc){ renderPage(); return; }
+  const img=document.getElementById('imgView');
+  // max-width を外してスクロール拡大できるようにする
+  img.style.maxWidth='none';
+  img.style.width=(zoom*380)+'px';
+}
 
 // ===== 名前一括入力 =====
 function showNameModal(){ document.getElementById('nameModal').classList.add('show'); document.getElementById('namePasteText').focus();}
@@ -304,7 +346,10 @@ function applyNamePaste(){
   const lines=document.getElementById('namePasteText').value.split('\n').filter(l=>l.trim());
   lines.forEach((line,i)=>{
     const row=i+1; if(row>ROWS) return;
-    const parts=line.split('\t');
+    // Tab区切り（Excel）優先、なければ2スペース区切り、それも1列なら1スペース区切り
+    let parts=line.split('\t');
+    if(parts.length===1) parts=line.trim().split(/\s{2,}/);
+    if(parts.length===1) parts=line.trim().split(/\s+/);
     const name=(parts[0]||'').trim();
     const grade=(parts[1]||'').trim();
     const sex=(parts[2]||'').trim();
@@ -530,6 +575,8 @@ function _dl(content,filename,mime){
 // ===== 初期化 =====
 document.getElementById('measDate').value=new Date().toISOString().split('T')[0];
 buildTable('sprint30');
+// テーブルへの一括ペーストリスナー（シート切替後も有効）
+document.getElementById('dataTable').addEventListener('paste', handleTablePaste);
 </script>
 </body>
 </html>
