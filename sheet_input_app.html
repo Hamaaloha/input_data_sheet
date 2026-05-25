@@ -348,33 +348,36 @@ async function startOCR(){
     ocrProgress(5,'Tesseract.js を読み込み中...');
     ocrLog('Tesseract.js (eng) を初期化中');
 
-    // Tesseract.js v4 をCDNから動的ロード
     if(!window.Tesseract){
       await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js');
     }
 
-    ocrProgress(15,'言語データを読み込み中...');
-    const worker = await Tesseract.createWorker('eng', 1, {
+    // canvas / 画像をどちらも dataURL に統一して渡す（blob URL は Tesseract が処理できないため）
+    ocrProgress(10,'画像を準備中...');
+    let dataUrl;
+    if(canvas.style.display!=='none' && canvas.width>0){
+      dataUrl = canvas.toDataURL('image/png');
+    } else {
+      const resp = await fetch(img.src);
+      const blob = await resp.blob();
+      dataUrl = await new Promise(r=>{ const fr=new FileReader(); fr.onload=e=>r(e.target.result); fr.readAsDataURL(blob); });
+    }
+
+    ocrLog('OCR開始（数字専用モード）');
+    ocrProgress(15,'認識中...');
+
+    const {data:{lines}} = await Tesseract.recognize(dataUrl, 'eng', {
       workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/worker.min.js',
       langPath: 'https://tessdata.projectnaptha.com/4.0.0',
       corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@4/tesseract-core.wasm.js',
       logger: m=>{
-        if(m.status==='recognizing text') ocrProgress(15+m.progress*70, `認識中: ${Math.round(m.progress*100)}%`);
-        else if(m.status==='loading language traineddata') ocrProgress(15+m.progress*5, `言語データ読み込み: ${Math.round(m.progress*100)}%`);
-      }
+        if(m.status==='recognizing text') ocrProgress(15+m.progress*75, `認識中: ${Math.round(m.progress*100)}%`);
+        else if(m.status==='loading language traineddata') ocrProgress(10+m.progress*5, `言語データ: ${Math.round(m.progress*100)}%`);
+      },
+      // 数字・小数点のみを認識対象にすることで精度向上
+      tessedit_char_whitelist: '0123456789.-',
+      tessedit_pageseg_mode: '6'
     });
-
-    ocrProgress(20,'画像を認識中...');
-    ocrLog('OCR開始');
-
-    let source;
-    if(canvas.style.display!=='none'){
-      source=canvas.toDataURL('image/png');
-    } else {
-      source=img.src;
-    }
-    const {data:{lines}} = await worker.recognize(source);
-    await worker.terminate();
 
     ocrProgress(90,'結果を解析中...');
     ocrLog(`認識行数: ${lines.length}`);
@@ -391,7 +394,8 @@ async function startOCR(){
     showOCRPreview(parsed);
 
   } catch(e){
-    const msg = e instanceof Error ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
+    console.error('OCR error:', e);
+    const msg = e instanceof Error ? e.message : (e != null ? String(e) : '原因不明のエラー');
     ocrLog('エラー: '+msg);
     ocrProgress(0,'エラーが発生しました');
     document.getElementById('ocrCancelBtn').disabled=false;
