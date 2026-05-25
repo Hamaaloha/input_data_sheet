@@ -204,13 +204,13 @@ const SHEETS = {
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   grip:{title:'握力 測定評価シート',cols:[
     {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
-    {k:'r1',label:'右①(kg)',t:'num',w:62},{k:'r2',label:'右②(kg)',t:'num',w:62},
-    {k:'l1',label:'左①(kg)',t:'num',w:62},{k:'l2',label:'左②(kg)',t:'num',w:62},
+    {k:'r1',label:'右①(kg)',t:'dec1',w:62},{k:'r2',label:'右②(kg)',t:'dec1',w:62},
+    {k:'l1',label:'左①(kg)',t:'dec1',w:62},{k:'l2',label:'左②(kg)',t:'dec1',w:62},
     {k:'adoptR',label:'採用(右)',t:'a12',w:52},{k:'adoptL',label:'採用(左)',t:'a12',w:52},
     {k:'note',label:'備考',t:'text',w:80}]},
   back:{title:'背筋力 測定評価シート',cols:[
     {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
-    {k:'t1',label:'①(kg)',t:'num',w:62},{k:'t2',label:'②(kg)',t:'num',w:62},
+    {k:'t1',label:'①(kg)',t:'dec1',w:62},{k:'t2',label:'②(kg)',t:'dec1',w:62},
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]}
 };
 
@@ -244,17 +244,20 @@ function cellHTML(type,row,col,ci){
     case 'sex':  return `<select id="${id}" ${d}><option value=""></option><option>男</option><option>女</option></select>`;
     case 'a12':  return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option></select>`;
     case 'a123': return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
-    // 整数3桁入力で小数第二位まで自動変換（例：423 → 4.23）
-    case 'stime': return `<input type="text" id="${id}" ${d} inputmode="numeric" placeholder="0.00" onblur="autoDecimal(this)" style="width:100%">`;
-    // 整数4桁入力で小数第二位まで自動変換（例：1234 → 12.34）
-    case 'mdist': return `<input type="text" id="${id}" ${d} inputmode="numeric" placeholder="00.00" onblur="autoDecimal(this)" style="width:100%">`;
+    // 整数3桁→小数第二位（例：423 → 4.23）
+    case 'stime': return `<input type="text" id="${id}" ${d} data-dec="2" inputmode="numeric" placeholder="0.00" onblur="autoDecimal(this)" style="width:100%">`;
+    // 整数4桁→小数第二位（例：1234 → 12.34）
+    case 'mdist': return `<input type="text" id="${id}" ${d} data-dec="2" inputmode="numeric" placeholder="00.00" onblur="autoDecimal(this)" style="width:100%">`;
+    // 整数→小数第一位（握力：3桁 例：123 → 12.3 ／ 背筋力：4桁 例：1234 → 123.4）
+    case 'dec1':  return `<input type="text" id="${id}" ${d} data-dec="1" inputmode="numeric" placeholder="0.0" onblur="autoDecimal(this)" style="width:100%">`;
   }
 }
 
 function autoDecimal(el){
+  const dec=parseInt(el.dataset.dec||'2',10);
   const v=el.value.replace(/[^\d]/g,'');
   if(!v){el.value='';return;}
-  el.value=v.length<=2?('0.'+v.padStart(2,'0')):(parseInt(v.slice(0,-2),10)+'.'+v.slice(-2));
+  el.value=v.length<=dec?('0.'+v.padStart(dec,'0')):(parseInt(v.slice(0,-dec),10)+'.'+v.slice(-dec));
 }
 
 function getVal(type,row,key){ const el=document.getElementById(`${type}_${row}_${key}`); return el?el.value.replace(',','.'):'';}
