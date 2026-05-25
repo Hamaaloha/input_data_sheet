@@ -190,7 +190,7 @@ const SHEETS = {
     {k:'adopt',label:'採用',t:'a12',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   mb:{title:'メディシンボール投げ 測定評価シート',cols:[
     {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
-    {k:'t1',label:'①(m)',t:'num',w:62},{k:'t2',label:'②(m)',t:'num',w:62},{k:'t3',label:'③予備(m)',t:'num',w:68},
+    {k:'t1',label:'①(m)',t:'mdist',w:62},{k:'t2',label:'②(m)',t:'mdist',w:62},{k:'t3',label:'③予備(m)',t:'mdist',w:68},
     {k:'adopt',label:'採用',t:'a123',w:44},{k:'note',label:'備考',t:'text',w:80}]},
   cmj:{title:'CMJ 測定評価シート',cols:[
     {k:'sei',label:'姓',t:'text',w:52},{k:'mei',label:'名',t:'text',w:52},{k:'grade',label:'学年',t:'grade',w:44},{k:'sex',label:'性別',t:'sex',w:36},
@@ -246,6 +246,8 @@ function cellHTML(type,row,col,ci){
     case 'a123': return `<select id="${id}" ${d}><option value=""></option><option>①</option><option>②</option><option>③</option></select>`;
     // 整数3桁入力で小数第二位まで自動変換（例：423 → 4.23）
     case 'stime': return `<input type="text" id="${id}" ${d} inputmode="numeric" placeholder="0.00" onblur="autoDecimal(this)" style="width:100%">`;
+    // 整数4桁入力で小数第二位まで自動変換（例：1234 → 12.34）
+    case 'mdist': return `<input type="text" id="${id}" ${d} inputmode="numeric" placeholder="00.00" onblur="autoDecimal(this)" style="width:100%">`;
   }
 }
 
