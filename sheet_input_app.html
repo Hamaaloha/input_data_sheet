@@ -127,16 +127,13 @@ td.ocr-warn{background:#fff8e0!important;}
   <div class="modal-box">
     <h2>📋 名前を一括入力</h2>
     <p>
-      1行に1名を入力してください。<br>
-      <strong>Excelからのコピペ推奨：</strong>氏名・学年・性別の列を選択してコピーすると<br>
-      タブ区切りで自動的に3列に振り分けられます。<br>
-      <span style="color:#888">例：山田 太郎[Tab]4年[Tab]男</span>
+      1行に1名。<strong>タブ区切り</strong>（Excelコピー）または<strong>スペース区切り</strong>で氏名・学年・性別を入力できます。<br>
+      既に入力されている内容は下欄に反映されています。編集して「適用」してください。<br>
+      <span style="color:#888">例（タブ）：山田 太郎　4年　男　／　例（スペース）：山田太郎 4年 男</span>
     </p>
-    <textarea id="namePasteText" placeholder="氏名のみ（1行1名）
-または
-山田 太郎&#9;4年&#9;男
-鈴木 花子&#9;2年&#9;女
-…"></textarea>
+    <textarea id="namePasteText" placeholder="山田 太郎	4年	男
+鈴木 花子	2年	女
+（空行＝その行をクリア）"></textarea>
     <div class="modal-actions">
       <button class="btn btn-gray" onclick="closeNameModal()">キャンセル</button>
       <button class="btn btn-teal" onclick="applyNamePaste()">✓ 適用</button>
@@ -338,7 +335,20 @@ function changeZoom(d){
 }
 
 // ===== 名前一括入力 =====
-function showNameModal(){ document.getElementById('nameModal').classList.add('show'); document.getElementById('namePasteText').focus();}
+function showNameModal(){
+  const type=document.getElementById('sheetType').value;
+  // 現状入力済みの氏名・学年・性別をテキストエリアに反映
+  const lines=[];
+  for(let i=1;i<=ROWS;i++){
+    const name=getVal(type,i,'name');
+    const grade=getVal(type,i,'grade');
+    const sex=getVal(type,i,'sex');
+    if(name||grade||sex) lines.push([name,grade,sex].join('\t'));
+  }
+  document.getElementById('namePasteText').value=lines.join('\n');
+  document.getElementById('nameModal').classList.add('show');
+  document.getElementById('namePasteText').focus();
+}
 function closeNameModal(){ document.getElementById('nameModal').classList.remove('show');}
 
 function applyNamePaste(){
