@@ -99,12 +99,14 @@ td.ocr-warn{background:#fff8e0!important;}
       <button onclick="changeZoom(-0.25)">縮小</button>
       <button onclick="changeZoom(0.25)">拡大</button>
     </div>
-    <div class="pdf-scroll" id="pdfScroll">
+    <div class="pdf-scroll" id="pdfScroll" style="position:relative;">
       <div class="pdf-placeholder" id="pdfPlaceholder">
         「スキャンを開く」から<br>PDF または 画像を選択
       </div>
       <canvas id="pdfCanvas" style="display:none"></canvas>
       <img id="imgView" style="display:none">
+      <!-- 領域選択オーバーレイ -->
+      <div id="selRect" style="display:none;position:absolute;border:2px solid #00B4D8;background:rgba(0,180,216,0.12);pointer-events:none;box-sizing:border-box;z-index:20;"></div>
     </div>
   </div>
 
@@ -112,7 +114,8 @@ td.ocr-warn{background:#fff8e0!important;}
   <div class="data-pane">
     <div class="data-toolbar">
       <button class="btn btn-green" onclick="showNameModal()">📋 名前を一括入力</button>
-      <button class="btn btn-teal" id="ocrBtn" onclick="startOCR()">🔍 OCRで数値読み取り</button>
+      <button class="btn btn-teal" id="ocrBtn" onclick="startOCR()">🔍 全体OCR</button>
+      <button class="btn btn-teal" id="selOcrBtn" onclick="toggleRegionSelect()">🔲 範囲OCR</button>
       <button class="btn btn-navy" onclick="exportMD()">📄 MD出力</button>
       <button class="btn btn-orange" onclick="exportCSV()">📥 CSV出力</button>
       <button class="btn btn-teal" onclick="document.getElementById('importInput').click()">📂 CSV/MD読込</button>
@@ -506,7 +509,7 @@ function ocrLog(msg){ const el=document.getElementById('ocrLog'); el.textContent
 function ocrProgress(pct,msg){ document.getElementById('ocrProgress').style.width=pct+'%'; document.getElementById('ocrStatusText').textContent=msg;}
 function closeOcrModal(){ document.getElementById('ocrModal').classList.remove('show');}
 
-async function startOCR(){
+async function startOCR(prebuiltDataUrl){
   const canvas=document.getElementById('pdfCanvas');
   const img=document.getElementById('imgView');
   const hasContent=(canvas.style.display!=='none'&&canvas.width>0)||(img.style.display!=='none'&&img.src);
@@ -520,16 +523,18 @@ async function startOCR(){
 
   try {
     ocrProgress(5,'Tesseract.js を読み込み中...');
-    ocrLog('Tesseract.js (eng) を初期化中');
+    ocrLog(prebuiltDataUrl?'OCR開始（範囲選択・前処理済み）':'Tesseract.js (eng) を初期化中');
 
     if(!window.Tesseract){
       await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js');
     }
 
-    // canvas / 画像をどちらも dataURL に統一して渡す（blob URL は Tesseract が処理できないため）
     ocrProgress(10,'画像を準備中...');
     let dataUrl;
-    if(canvas.style.display!=='none' && canvas.width>0){
+    if(prebuiltDataUrl){
+      // 範囲選択OCR：前処理済みの dataURL をそのまま使用
+      dataUrl=prebuiltDataUrl;
+    } else if(canvas.style.display!=='none' && canvas.width>0){
       dataUrl = canvas.toDataURL('image/png');
     } else {
       const resp = await fetch(img.src);
@@ -548,9 +553,9 @@ async function startOCR(){
         if(m.status==='recognizing text') ocrProgress(15+m.progress*75, `認識中: ${Math.round(m.progress*100)}%`);
         else if(m.status==='loading language traineddata') ocrProgress(10+m.progress*5, `言語データ: ${Math.round(m.progress*100)}%`);
       },
-      // 数字・小数点のみを認識対象にすることで精度向上
       tessedit_char_whitelist: '0123456789.-',
-      tessedit_pageseg_mode: '6'
+      // 範囲選択時は縦1列モード(4)、全体は均一ブロックモード(6)
+      tessedit_pageseg_mode: prebuiltDataUrl ? '4' : '6'
     });
 
     ocrProgress(90,'結果を解析中...');
@@ -701,39 +706,136 @@ function _dl(content,filename,mime){
   a.href=URL.createObjectURL(blob); a.download=filename; a.click();
 }
 
-// ===== ドラッグ・パン & ホイールズーム =====
+// ===== ドラッグ・パン & ホイールズーム & 領域選択 =====
 (function(){
   const scroll=document.getElementById('pdfScroll');
   let dragging=false, startX, startY, scrollLeft, scrollTop;
 
+  // 領域選択モード
+  let selMode=false, selSX, selSY, selEX, selEY;
+  const selRect=document.getElementById('selRect');
+
+  window.toggleRegionSelect=function(){
+    selMode=!selMode;
+    const btn=document.getElementById('selOcrBtn');
+    if(selMode){
+      scroll.style.cursor='crosshair';
+      btn.style.background='#03C49D';
+      btn.textContent='✕ 範囲解除';
+      selRect.style.display='none';
+    } else {
+      scroll.style.cursor='';
+      btn.style.background='';
+      btn.textContent='🔲 範囲OCR';
+      selRect.style.display='none';
+    }
+  };
+
+  // 画像要素を取得（PDF canvas or img）
+  function getSrc(){
+    const c=document.getElementById('pdfCanvas');
+    return c.style.display!=='none'?c:document.getElementById('imgView');
+  }
+
+  // スクリーン座標 → 画像要素上の表示ピクセル座標
+  function toImgCoords(clientX,clientY){
+    const r=getSrc().getBoundingClientRect();
+    return {x:clientX-r.left, y:clientY-r.top};
+  }
+
+  // 選択領域を前処理して dataURL を返す
+  function getCroppedDataURL(ix,iy,iw,ih){
+    const src=getSrc();
+    const scale=3;
+    const off=document.createElement('canvas');
+    off.width=Math.max(1,Math.round(iw*scale));
+    off.height=Math.max(1,Math.round(ih*scale));
+    const ctx=off.getContext('2d');
+
+    // 表示サイズ vs 実ピクセルのスケール比
+    let sx=1,sy=1;
+    if(src.tagName==='CANVAS'){
+      sx=src.width/src.clientWidth; sy=src.height/src.clientHeight;
+    } else {
+      sx=src.naturalWidth/src.clientWidth; sy=src.naturalHeight/src.clientHeight;
+    }
+    ctx.drawImage(src, ix*sx, iy*sy, iw*sx, ih*sy, 0, 0, off.width, off.height);
+
+    // コントラスト強調（オートレベル + グレースケール化）
+    const imgData=ctx.getImageData(0,0,off.width,off.height);
+    const d=imgData.data;
+    let mn=255,mx=0;
+    for(let i=0;i<d.length;i+=4){
+      const l=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      if(l<mn) mn=l; if(l>mx) mx=l;
+    }
+    const rng=mx-mn||1;
+    for(let i=0;i<d.length;i+=4){
+      const l=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      const v=Math.round((l-mn)/rng*255);
+      d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+    }
+    ctx.putImageData(imgData,0,0);
+    return off.toDataURL('image/png');
+  }
+
   scroll.addEventListener('mousedown',e=>{
     if(e.button!==0) return;
-    dragging=true;
-    scroll.classList.add('dragging');
-    startX=e.clientX; startY=e.clientY;
-    scrollLeft=scroll.scrollLeft; scrollTop=scroll.scrollTop;
-    e.preventDefault();
+    if(selMode){
+      const p=toImgCoords(e.clientX,e.clientY);
+      selSX=p.x; selSY=p.y; selEX=p.x; selEY=p.y;
+      e.preventDefault();
+    } else {
+      dragging=true;
+      scroll.classList.add('dragging');
+      startX=e.clientX; startY=e.clientY;
+      scrollLeft=scroll.scrollLeft; scrollTop=scroll.scrollTop;
+      e.preventDefault();
+    }
   });
+
   document.addEventListener('mousemove',e=>{
+    if(selMode && selSX!=null){
+      const p=toImgCoords(e.clientX,e.clientY);
+      selEX=p.x; selEY=p.y;
+      // selRect を画像要素の左上を基準に配置
+      const src=getSrc();
+      const srcRect=src.getBoundingClientRect();
+      const scrollRect=scroll.getBoundingClientRect();
+      const ox=srcRect.left-scrollRect.left+scroll.scrollLeft;
+      const oy=srcRect.top -scrollRect.top +scroll.scrollTop;
+      const rx=Math.min(selSX,selEX), ry=Math.min(selSY,selEY);
+      const rw=Math.abs(selEX-selSX), rh=Math.abs(selEY-selSY);
+      selRect.style.cssText+=`;display:block;left:${ox+rx}px;top:${oy+ry}px;width:${rw}px;height:${rh}px;`;
+    }
     if(!dragging) return;
     scroll.scrollLeft=scrollLeft-(e.clientX-startX);
     scroll.scrollTop =scrollTop -(e.clientY-startY);
   });
-  document.addEventListener('mouseup',()=>{
+
+  document.addEventListener('mouseup',e=>{
+    if(selMode && selSX!=null){
+      const iw=Math.abs(selEX-selSX), ih=Math.abs(selEY-selSY);
+      if(iw>10 && ih>10){
+        const ix=Math.min(selSX,selEX), iy=Math.min(selSY,selEY);
+        const dataUrl=getCroppedDataURL(ix,iy,iw,ih);
+        startOCR(dataUrl);
+      }
+      selSX=null;
+      toggleRegionSelect(); // 選択後は解除
+    }
     dragging=false; scroll.classList.remove('dragging');
   });
 
-  // ホイールでズーム（Ctrl不要、そのままホイール）
+  // ホイールでズーム
   scroll.addEventListener('wheel',e=>{
     e.preventDefault();
-    // ホイール位置をスクロール座標に変換して、ズーム後も同じ点が中心に来るようにする
     const rect=scroll.getBoundingClientRect();
     const offsetX=e.clientX-rect.left+scroll.scrollLeft;
     const offsetY=e.clientY-rect.top +scroll.scrollTop;
     const prevZoom=zoom;
     const delta=e.deltaY<0?0.15:-0.15;
     changeZoom(delta);
-    // ズーム後にマウス位置が同じになるようスクロール位置を補正
     const ratio=zoom/prevZoom;
     scroll.scrollLeft=offsetX*ratio-(e.clientX-rect.left);
     scroll.scrollTop =offsetY*ratio-(e.clientY-rect.top);
