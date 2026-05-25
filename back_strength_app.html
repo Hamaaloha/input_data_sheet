@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>背筋力測定システム</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{--navy:#0D1B33;--accent:#00B4D8;--teal:#03C49D;--orange:#D97310;--red:#BF1A1A;--green:#00A66E;--bg:#F1F1F1;--card:#fff;--text:#1a1a2e;--muted:#595959;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Yu Gothic','Meiryo',sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+header{background:var(--navy);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:16px;}
+header h1{font-size:1.1em;font-weight:700;}
+header span{font-size:.8em;opacity:.7;}
+.tab-nav{background:var(--navy);display:flex;gap:2px;padding:0 20px;}
+.tab-btn{padding:8px 20px;background:rgba(255,255,255,.1);color:#fff;border:none;cursor:pointer;font-size:.85em;border-radius:6px 6px 0 0;font-family:inherit;transition:background .2s;}
+.tab-btn.active{background:var(--accent);font-weight:bold;}
+.tab-pane{display:none;} .tab-pane.active{display:flex;gap:16px;padding:16px;flex-wrap:wrap;}
+.tab-pane.group-pane{display:none;} .tab-pane.group-pane.active{display:block;padding:16px;}
+.panel-l{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
+.panel-r{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;}
+.card{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);}
+.card h3{font-size:.9em;color:var(--navy);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent);}
+.row{display:flex;gap:10px;margin-bottom:8px;align-items:center;}
+.row label{font-size:.82em;color:var(--muted);width:100px;flex-shrink:0;}
+.row input,.row select{flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.9em;font-family:inherit;}
+.row input:focus{outline:none;border-color:var(--accent);}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.mbox{background:var(--navy);color:#fff;border-radius:8px;padding:12px;text-align:center;}
+.mbox .val{font-size:1.5em;font-weight:bold;color:var(--accent);}
+.mbox .lbl{font-size:.75em;opacity:.8;margin-top:2px;}
+.badge{display:inline-block;padding:3px 14px;border-radius:20px;font-weight:bold;font-size:1em;color:#fff;}
+.A{background:var(--green);} .B{background:var(--accent);} .C{background:#888;} .D{background:var(--orange);} .E{background:var(--red);}
+.btn-calc{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:1em;font-weight:bold;cursor:pointer;font-family:inherit;margin-top:8px;}
+.btn-calc:hover{background:#009ab8;}
+.btn-add{padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:.85em;cursor:pointer;font-family:inherit;}
+table{width:100%;border-collapse:collapse;font-size:.85em;}
+th{background:var(--navy);color:#fff;padding:8px;text-align:center;}
+td{padding:7px;border-bottom:1px solid #eee;text-align:center;}
+tr:hover td{background:#f5f9ff;}
+.chart-wrap{position:relative;height:260px;}
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;margin:12px 0;}
+.gauge-bar{width:100%;height:24px;border-radius:12px;background:linear-gradient(to right,#BF1A1A,#D97310,#f0b429,#00A66E,#008DC0);position:relative;}
+.gauge-ptr{position:absolute;top:-8px;width:4px;height:40px;background:var(--navy);border-radius:2px;transform:translateX(-50%);transition:left .6s;}
+.gauge-labels{display:flex;justify-content:space-between;width:100%;font-size:.75em;color:var(--muted);margin-top:4px;}
+@media(max-width:720px){.panel-l{width:100%;}.tab-pane.active{flex-direction:column;}}
+.btn-print{padding:9px 22px;background:var(--navy);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.88em;font-weight:bold;}
+.btn-print:hover{background:#1a2e52;}
+.btn-csv{padding:9px 22px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.88em;font-weight:bold;}
+.btn-csv:hover{background:#b85e00;}
+@media print{
+  .tab-nav,.panel-l,.btn-calc,.btn-add,.btn-print,.btn-csv,button{display:none!important;}
+  body *{visibility:hidden;}
+  #report-wrap,#report-wrap *{visibility:visible;}
+  #report-wrap{position:absolute;top:0;left:0;width:100%;padding:24px;}
+  .card{box-shadow:none!important;border:1px solid #ddd;margin-bottom:12px;}
+  .mbox{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>背筋力測定システム</h1>
+    <span>Back Strength Analysis</span>
+  </div>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="showTab('input',this)">📥 データ入力</button>
+  <button class="tab-btn" onclick="showTab('report',this)">📋 個票</button>
+  <button class="tab-btn" onclick="showTab('group',this)">👥 グループ比較</button>
+</div>
+
+<!-- データ入力 -->
+<div id="tab-input" class="tab-pane active">
+  <div class="panel-l">
+    <div class="card">
+      <h3>👤 選手情報</h3>
+      <div class="row"><label>姓</label><input id="lastName" placeholder="山田"></div>
+      <div class="row"><label>名</label><input id="firstName" placeholder="太郎"></div>
+      <div class="row"><label>ID</label><input id="pid" placeholder="001"></div>
+      <div class="row"><label>性別</label>
+        <select id="gender"><option value="m">男性</option><option value="f">女性</option></select>
+      </div>
+      <div class="row"><label>学年</label>
+        <select id="grade"><option>1年</option><option>2年</option><option>3年</option><option>4年</option></select>
+      </div>
+      <div class="row"><label>体重 (kg)</label><input id="bw" type="number" inputmode="decimal" placeholder="70.0"></div>
+      <div class="row"><label>測定日</label><input id="mdate" type="date"></div>
+    </div>
+
+    <div class="card">
+      <h3>💪 背筋力測定値 (kg)</h3>
+      <p style="font-size:.8em;color:var(--muted);margin-bottom:10px">2試技を入力 → 最大値を自動使用</p>
+      <div class="row"><label>試技 1</label><input id="b1" type="number" inputmode="decimal" placeholder="140.0"></div>
+      <div class="row"><label>試技 2</label><input id="b2" type="number" inputmode="decimal" placeholder="145.0"></div>
+      <button class="btn-calc" onclick="calc()">▶ 計算する</button>
+    </div>
+  </div>
+
+  <div class="panel-r">
+    <div class="card">
+      <h3>📊 測定結果</h3>
+      <div class="metrics">
+        <div class="mbox"><div class="val" id="r-best">—</div><div class="lbl">最大背筋力 (kg)</div></div>
+        <div class="mbox"><div class="val" id="r-index">—</div><div class="lbl">背筋力指数 (%)</div></div>
+        <div class="mbox"><div class="val" id="r-dev">—</div><div class="lbl">偏差値</div></div>
+        <div class="mbox"><div class="val" id="r-grade">—</div><div class="lbl">評価グレード</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📈 試技別背筋力</h3>
+      <div class="chart-wrap"><canvas id="trialChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h3>🎯 評価一覧</h3>
+      <div class="gauge-wrap" id="gauge-wrap" style="display:none">
+        <p style="font-size:.82em;color:var(--muted);margin-bottom:6px;align-self:flex-start">偏差値ゲージ</p>
+        <div class="gauge-bar" style="width:100%">
+          <div class="gauge-ptr" id="gauge-ptr" style="left:50%"></div>
+        </div>
+        <div class="gauge-labels" style="width:100%">
+          <span>20 (E)</span><span>30 (D)</span><span>40 (C)</span><span>50 (B)</span><span>60 (A)</span><span>80</span>
+        </div>
+      </div>
+      <table><thead><tr><th>項目</th><th>値</th><th>偏差値</th><th>評価</th></tr></thead>
+      <tbody id="eval-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- 個票 -->
+<div id="tab-report" class="tab-pane">
+  <div style="width:100%;max-width:680px;margin:0 auto" id="report-wrap">
+    <div class="card" style="text-align:center;color:var(--muted);padding:40px">データ入力タブで計算してください</div>
+  </div>
+</div>
+
+<!-- グループ比較 -->
+<div id="tab-group" class="tab-pane group-pane">
+  <div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-weight:bold">グループに追加：</span>
+    <span id="cur-name" style="color:var(--muted);font-size:.9em">先に計算を実行してください</span>
+    <button class="btn-add" id="add-btn" onclick="addGroup()" disabled>＋ 追加</button>
+    <button onclick="clearGroup()" style="padding:8px 16px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.85em">🗑 クリア</button>
+    <button class="btn-csv" onclick="downloadGroupCSV()">📥 グループCSVダウンロード</button>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:300px">
+      <div class="card">
+        <h3>👥 グループ一覧</h3>
+        <table><thead><tr><th>選手名</th><th>背筋力(kg)</th><th>指数(%)</th><th>偏差値</th><th>評価</th></tr></thead>
+        <tbody id="g-tbody"></tbody></table>
+      </div>
+    </div>
+    <div style="width:360px;flex-shrink:0">
+      <div class="card"><h3>📊 グループ分布</h3>
+        <div class="chart-wrap"><canvas id="groupChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 基準値（日本人大学生アスリート目安）
+// 背筋力指数 = 背筋力/体重×100 (%)
+const NORM = {
+  m: { mean:140, sd:28, idxMean:200, idxSd:30 },
+  f: { mean:82,  sd:18, idxMean:140, idxSd:25 }
+};
+let cur = null, group = [], tChart = null, gChart = null;
+
+function showTab(id,btn){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+function pf(id){ const v=parseFloat(document.getElementById(id).value.replace(',','.')); return isNaN(v)?null:v; }
+function dv(val,mean,sd){ return sd?Math.round((val-mean)/sd*10+50):50; }
+function grd(d){ return d>=60?'A':d>=50?'B':d>=40?'C':d>=30?'D':'E'; }
+function gc(g){ return {A:'#00A66E',B:'#00B4D8',C:'#888',D:'#D97310',E:'#BF1A1A'}[g]; }
+
+function calc(){
+  const gender = document.getElementById('gender').value;
+  const norm = NORM[gender];
+  const bw = pf('bw');
+  const b1=pf('b1'), b2=pf('b2');
+  const vals = [b1,b2].filter(v=>v!==null);
+  if(!vals.length){ alert('測定値を入力してください'); return; }
+
+  const best = Math.max(...vals);
+  const idx = bw ? Math.round(best/bw*100*10)/10 : null;
+  const devVal = dv(best, norm.mean, norm.sd);
+  const idxDev = idx ? dv(idx, norm.idxMean, norm.idxSd) : null;
+  const g = grd(devVal);
+
+  cur = {
+    name: (document.getElementById('lastName').value+' '+document.getElementById('firstName').value).trim()||'選手',
+    id: document.getElementById('pid').value||'-',
+    grade: document.getElementById('grade').value,
+    gender, bw, b1, b2, best, idx, devVal, idxDev, g,
+    date: document.getElementById('mdate').value, norm
+  };
+
+  document.getElementById('r-best').textContent = best+' kg';
+  document.getElementById('r-index').textContent = idx ? idx+'%' : '—';
+  document.getElementById('r-dev').textContent = devVal;
+  document.getElementById('r-grade').innerHTML = `<span class="badge ${g}">${g}</span>`;
+
+  // ゲージ
+  document.getElementById('gauge-wrap').style.display='';
+  const pct = Math.min(Math.max((devVal-20)/60*100, 0), 100);
+  document.getElementById('gauge-ptr').style.left = pct+'%';
+
+  // 試技チャート
+  if(tChart) tChart.destroy();
+  const tData = [b1??0, b2??0];
+  tChart = new Chart(document.getElementById('trialChart'),{
+    type:'bar',
+    data:{
+      labels:['試技 1','試技 2'],
+      datasets:[{
+        label:'背筋力(kg)',
+        data: tData,
+        backgroundColor: tData.map(v=>v===best?'#00B4D8':'#7ecce0'),
+        borderRadius:6
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false,title:{display:true,text:'背筋力 (kg)'}}}}
+  });
+
+  // 評価表
+  const rows = [
+    ['最大背筋力', best+' kg', devVal],
+    ...(idx?[['背筋力指数', idx+'%', idxDev]]:[]),
+    ...(bw?[['体重', bw+' kg', null]]:[]),
+  ];
+  document.getElementById('eval-tbody').innerHTML = rows.map(([l,v,d])=>{
+    const bg=d?grd(d):''; const badge=d?`<span class="badge ${bg}" style="font-size:.8em">${bg}</span>`:'—';
+    return `<tr><td style="text-align:left">${l}</td><td>${v}</td><td>${d??'—'}</td><td>${badge}</td></tr>`;
+  }).join('');
+
+  // 個票
+  document.getElementById('report-wrap').innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <h3>📋 個人測定票 — 背筋力</h3>
+      <table><tbody>
+        <tr><td style="text-align:left;font-weight:bold">選手名</td><td>${cur.name}</td><td style="text-align:left;font-weight:bold">ID</td><td>${cur.id}</td></tr>
+        <tr><td style="text-align:left;font-weight:bold">学年</td><td>${cur.grade}</td><td style="text-align:left;font-weight:bold">性別</td><td>${gender==='m'?'男性':'女性'}</td></tr>
+        <tr><td style="text-align:left;font-weight:bold">体重</td><td>${bw??'—'} kg</td><td style="text-align:left;font-weight:bold">測定日</td><td>${cur.date||'—'}</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h3>📊 結果サマリー</h3>
+      <div class="metrics">
+        <div class="mbox"><div class="val" style="color:var(--accent)">${best} kg</div><div class="lbl">最大背筋力</div></div>
+        <div class="mbox"><div class="val" style="color:var(--teal)">${idx??'—'}%</div><div class="lbl">背筋力指数</div></div>
+        <div class="mbox"><div class="val" style="color:${gc(g)}">${devVal}</div><div class="lbl">偏差値</div></div>
+        <div class="mbox"><div class="val"><span class="badge ${g}">${g}</span></div><div class="lbl">評価</div></div>
+      </div>
+    </div>`;
+
+  document.getElementById('cur-name').textContent = cur.name+' ('+best+' kg)';
+  document.getElementById('add-btn').disabled = false;
+
+  document.getElementById('report-wrap').innerHTML += `
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn-print" onclick="printReport()">🖨 印刷 / PDF保存</button>
+      <button class="btn-csv" onclick="downloadCSV()">📥 個人CSVダウンロード</button>
+    </div>`;
+}
+
+function printReport(){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-report').classList.add('active');
+  document.querySelectorAll('.tab-btn')[1].classList.add('active');
+  setTimeout(()=>window.print(), 150);
+}
+
+function downloadCSV(){
+  if(!cur) return;
+  const h = ['選手名','ID','学年','性別','体重(kg)','測定日','最大背筋力(kg)','背筋力指数(%)','偏差値','評価'];
+  const r = [cur.name,cur.id,cur.grade,cur.gender==='m'?'男性':'女性',cur.bw??'',cur.date,cur.best,cur.idx??'',cur.devVal,cur.g];
+  const csv = [h,r].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
+  _dlCSV(csv, `背筋力_${cur.name}_${cur.date||'nodate'}.csv`);
+}
+
+function downloadGroupCSV(){
+  if(!group.length){ alert('グループにデータがありません'); return; }
+  const h = ['選手名','ID','学年','性別','体重(kg)','測定日','最大背筋力(kg)','背筋力指数(%)','偏差値','評価'];
+  const rows = group.map(r=>[r.name,r.id,r.grade,r.gender==='m'?'男性':'女性',r.bw??'',r.date,r.best,r.idx??'',r.devVal,r.g]);
+  const csv = [h,...rows].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
+  _dlCSV(csv, `背筋力_group_${new Date().toISOString().split('T')[0]}.csv`);
+}
+
+function _dlCSV(csv, filename){
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function addGroup(){
+  if(!cur) return;
+  group.push({...cur});
+  renderGroup();
+}
+function clearGroup(){
+  group=[];
+  document.getElementById('g-tbody').innerHTML='';
+  if(gChart){gChart.destroy();gChart=null;}
+}
+function renderGroup(){
+  document.getElementById('g-tbody').innerHTML = group.map(r=>`
+    <tr><td style="text-align:left">${r.name}</td><td>${r.best}</td><td>${r.idx??'—'}</td><td>${r.devVal}</td>
+    <td><span class="badge ${r.g}" style="font-size:.8em">${r.g}</span></td></tr>`).join('');
+  if(gChart) gChart.destroy();
+  gChart = new Chart(document.getElementById('groupChart'),{
+    type:'bar',
+    data:{
+      labels: group.map(r=>r.name),
+      datasets:[{
+        label:'背筋力(kg)',
+        data: group.map(r=>r.best),
+        backgroundColor: group.map(r=>gc(r.g)+'cc'),
+        borderRadius:6
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false,title:{display:true,text:'背筋力 (kg)'}}}}
+  });
+}
+
+document.getElementById('mdate').value = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>

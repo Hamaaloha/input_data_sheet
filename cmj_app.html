@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMJ 跳躍力測定システム</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --navy:#0D1B33; --accent:#00B4D8; --teal:#03C49D;
+  --orange:#D97310; --red:#BF1A1A; --green:#00A66E;
+  --bg:#F1F1F1; --card:#fff; --text:#1a1a2e; --muted:#595959;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Yu Gothic','Meiryo',sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+header{background:var(--navy);color:#fff;padding:12px 20px;display:flex;align-items:center;gap:16px;}
+header h1{font-size:1.1em;font-weight:700;}
+header span{font-size:0.8em;opacity:.7;}
+.tab-nav{background:var(--navy);display:flex;gap:2px;padding:0 20px;}
+.tab-btn{padding:8px 20px;background:rgba(255,255,255,.1);color:#fff;border:none;cursor:pointer;font-size:.85em;border-radius:6px 6px 0 0;font-family:inherit;transition:background .2s;}
+.tab-btn.active{background:var(--accent);font-weight:bold;}
+.tab-pane{display:none;} .tab-pane.active{display:flex;gap:16px;padding:16px;flex-wrap:wrap;}
+.tab-pane.group-pane{display:none;} .tab-pane.group-pane.active{display:block;padding:16px;}
+.panel-l{width:340px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;}
+.panel-r{flex:1;min-width:300px;display:flex;flex-direction:column;gap:12px;}
+.card{background:var(--card);border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);}
+.card h3{font-size:.9em;color:var(--navy);margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--accent);}
+.row{display:flex;gap:10px;margin-bottom:8px;align-items:center;}
+.row label{font-size:.82em;color:var(--muted);width:96px;flex-shrink:0;}
+.row input,.row select{flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.9em;font-family:inherit;}
+.row input:focus{outline:none;border-color:var(--accent);}
+.toggle-wrap{display:flex;gap:8px;margin-bottom:10px;}
+.tog{padding:5px 14px;border:2px solid var(--accent);border-radius:20px;background:#fff;color:var(--accent);font-size:.8em;cursor:pointer;font-family:inherit;transition:all .2s;}
+.tog.active{background:var(--accent);color:#fff;}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.mbox{background:var(--navy);color:#fff;border-radius:8px;padding:12px;text-align:center;}
+.mbox .val{font-size:1.6em;font-weight:bold;color:var(--accent);}
+.mbox .lbl{font-size:.75em;opacity:.8;margin-top:2px;}
+.badge{display:inline-block;padding:3px 14px;border-radius:20px;font-weight:bold;font-size:1em;color:#fff;}
+.A{background:var(--green);} .B{background:var(--accent);} .C{background:#888;} .D{background:var(--orange);} .E{background:var(--red);}
+.btn-calc{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:1em;font-weight:bold;cursor:pointer;font-family:inherit;margin-top:8px;transition:background .2s;}
+.btn-calc:hover{background:#009ab8;}
+.btn-add{padding:8px 20px;background:var(--teal);color:#fff;border:none;border-radius:6px;font-size:.85em;cursor:pointer;font-family:inherit;}
+table{width:100%;border-collapse:collapse;font-size:.85em;}
+th{background:var(--navy);color:#fff;padding:8px;text-align:center;}
+td{padding:7px;border-bottom:1px solid #eee;text-align:center;}
+tr:hover td{background:#f5f9ff;}
+.chart-wrap{position:relative;height:260px;}
+@media(max-width:720px){.panel-l{width:100%;}.tab-pane.active{flex-direction:column;}}
+.btn-print{padding:9px 22px;background:var(--navy);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.88em;font-weight:bold;}
+.btn-print:hover{background:#1a2e52;}
+.btn-csv{padding:9px 22px;background:var(--orange);color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.88em;font-weight:bold;}
+.btn-csv:hover{background:#b85e00;}
+@media print{
+  .tab-nav,.panel-l,.btn-calc,.btn-add,.btn-print,.btn-csv,.tog,.toggle-wrap,button{display:none!important;}
+  body *{visibility:hidden;}
+  #report-wrap,#report-wrap *{visibility:visible;}
+  #report-wrap{position:absolute;top:0;left:0;width:100%;padding:24px;}
+  .card{box-shadow:none!important;border:1px solid #ddd;margin-bottom:12px;}
+  .mbox{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .badge{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>CMJ 跳躍力測定システム</h1>
+    <span>Counter Movement Jump Analysis</span>
+  </div>
+</header>
+
+<div class="tab-nav">
+  <button class="tab-btn active" onclick="showTab('input',this)">📥 データ入力</button>
+  <button class="tab-btn" onclick="showTab('report',this)">📋 個票</button>
+  <button class="tab-btn" onclick="showTab('group',this)">👥 グループ比較</button>
+</div>
+
+<!-- データ入力 -->
+<div id="tab-input" class="tab-pane active">
+  <div class="panel-l">
+    <div class="card">
+      <h3>👤 選手情報</h3>
+      <div class="row"><label>姓</label><input id="lastName" placeholder="山田"></div>
+      <div class="row"><label>名</label><input id="firstName" placeholder="太郎"></div>
+      <div class="row"><label>ID</label><input id="pid" placeholder="001"></div>
+      <div class="row"><label>性別</label>
+        <select id="gender"><option value="m">男性</option><option value="f">女性</option></select>
+      </div>
+      <div class="row"><label>学年</label>
+        <select id="grade"><option>1年</option><option>2年</option><option>3年</option><option>4年</option></select>
+      </div>
+      <div class="row"><label>体重 (kg)</label><input id="bw" type="number" inputmode="decimal" placeholder="70.0"></div>
+      <div class="row"><label>測定日</label><input id="mdate" type="date"></div>
+    </div>
+
+    <div class="card">
+      <h3>🦵 CMJ 測定値</h3>
+      <p style="font-size:.8em;color:var(--muted);margin-bottom:8px">入力方式：</p>
+      <div class="toggle-wrap">
+        <button class="tog active" onclick="setMode('height',this)">跳躍高 (cm)</button>
+        <button class="tog" onclick="setMode('flight',this)">滞空時間 (秒)</button>
+      </div>
+      <div id="h-in">
+        <div class="row"><label>試技 1</label><input id="h1" type="number" inputmode="decimal" placeholder="38.0"></div>
+        <div class="row"><label>試技 2</label><input id="h2" type="number" inputmode="decimal" placeholder="40.0"></div>
+        <div class="row"><label>試技 3</label><input id="h3" type="number" inputmode="decimal" placeholder="39.0"></div>
+      </div>
+      <div id="f-in" style="display:none">
+        <div class="row"><label>試技 1 (s)</label><input id="f1" type="number" inputmode="decimal" placeholder="0.570"></div>
+        <div class="row"><label>試技 2 (s)</label><input id="f2" type="number" inputmode="decimal" placeholder="0.580"></div>
+        <div class="row"><label>試技 3 (s)</label><input id="f3" type="number" inputmode="decimal" placeholder="0.575"></div>
+      </div>
+      <button class="btn-calc" onclick="calc()">▶ 計算する</button>
+    </div>
+  </div>
+
+  <div class="panel-r">
+    <div class="card">
+      <h3>📊 測定結果</h3>
+      <div class="metrics">
+        <div class="mbox"><div class="val" id="r-height">—</div><div class="lbl">最高跳躍高 (cm)</div></div>
+        <div class="mbox"><div class="val" id="r-power">—</div><div class="lbl">推定相対パワー (W/kg)</div></div>
+        <div class="mbox"><div class="val" id="r-dev">—</div><div class="lbl">偏差値</div></div>
+        <div class="mbox"><div class="val" id="r-grade">—</div><div class="lbl">評価グレード</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📈 試技別跳躍高</h3>
+      <div class="chart-wrap"><canvas id="trialChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>🎯 評価一覧</h3>
+      <table><thead><tr><th>項目</th><th>値</th><th>偏差値</th><th>評価</th></tr></thead>
+      <tbody id="eval-tbody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<!-- 個票 -->
+<div id="tab-report" class="tab-pane">
+  <div style="width:100%;max-width:680px;margin:0 auto" id="report-wrap">
+    <div class="card" style="text-align:center;color:var(--muted);padding:40px">データ入力タブで計算してください</div>
+  </div>
+</div>
+
+<!-- グループ比較 -->
+<div id="tab-group" class="tab-pane group-pane">
+  <div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <span style="font-weight:bold">グループに追加：</span>
+    <span id="cur-name" style="color:var(--muted);font-size:.9em">先に計算を実行してください</span>
+    <button class="btn-add" id="add-btn" onclick="addGroup()" disabled>＋ 追加</button>
+    <button onclick="clearGroup()" style="padding:8px 16px;background:#eee;border:none;border-radius:6px;cursor:pointer;font-family:inherit;font-size:.85em">🗑 クリア</button>
+    <button class="btn-csv" onclick="downloadGroupCSV()">📥 グループCSVダウンロード</button>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <div style="flex:1;min-width:300px">
+      <div class="card">
+        <h3>👥 グループ一覧</h3>
+        <table><thead><tr><th>選手名</th><th>跳躍高(cm)</th><th>パワー(W/kg)</th><th>偏差値</th><th>評価</th></tr></thead>
+        <tbody id="g-tbody"></tbody></table>
+      </div>
+    </div>
+    <div style="width:360px;flex-shrink:0">
+      <div class="card"><h3>📊 グループ分布</h3>
+        <div class="chart-wrap"><canvas id="groupChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 基準値：Haugen et al. (2021) Int J Sports Physiol Perform, 16(2):184-189.
+// 対象：筋力・パワー系競技（投擲含む）国際レベルアスリート 男989名・女588名
+// 男子: mean=51.9cm, SD=6.9cm / 女子: mean=39.6cm, SD=5.1cm
+const NORM = {
+  m: { mean:51.9, sd:6.9, pMean:52, pSd:8 },
+  f: { mean:39.6, sd:5.1, pMean:38, pSd:7 }
+};
+// 評価グレード基準（同論文の分布に基づく目安）
+// Below(<42cm男/28cm女), Average(~52cm男/40cm女), Elite(>68cm男/50cm女)
+const G = 9.81;
+let mode = 'height';
+let cur = null;
+let group = [];
+let tChart = null, gChart = null;
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+function setMode(m, btn) {
+  mode = m;
+  document.getElementById('h-in').style.display = m==='height'?'':'none';
+  document.getElementById('f-in').style.display = m==='flight'?'':'none';
+  document.querySelectorAll('.tog').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function pf(id){ const v=parseFloat(document.getElementById(id).value.replace(',','.')); return isNaN(v)?null:v; }
+function dev(val,mean,sd){ return sd?Math.round((val-mean)/sd*10+50):50; }
+function grd(d){ return d>=60?'A':d>=50?'B':d>=40?'C':d>=30?'D':'E'; }
+function gc(g){ return {A:getComputedStyle(document.documentElement).getPropertyValue('--green').trim(),B:'#00B4D8',C:'#888',D:'#D97310',E:'#BF1A1A'}[g]; }
+
+function calc() {
+  const bw = pf('bw');
+  const gender = document.getElementById('gender').value;
+  const norm = NORM[gender];
+  let trials = [];
+  if(mode==='height'){
+    ['h1','h2','h3'].forEach(id=>{ const v=pf(id); if(v!==null) trials.push(v); });
+  } else {
+    ['f1','f2','f3'].forEach(id=>{ const v=pf(id); if(v!==null) trials.push((G*v*v/8)*100); });
+  }
+  if(!trials.length){ alert('測定値を入力してください'); return; }
+
+  const best = Math.max(...trials);
+  const pp = bw ? 60.7*best + 45.3*bw - 2055 : null; // Sayers式
+  const ppRel = pp&&bw ? Math.round(pp/bw*10)/10 : null;
+  const dv = dev(best, norm.mean, norm.sd);
+  const g = grd(dv);
+
+  cur = {
+    name: (document.getElementById('lastName').value+' '+document.getElementById('firstName').value).trim()||'選手',
+    id: document.getElementById('pid').value||'-',
+    grade: document.getElementById('grade').value,
+    gender, bw,
+    trials: trials.map(v=>Math.round(v*10)/10),
+    best: Math.round(best*10)/10,
+    pp: pp?Math.round(pp):null, ppRel,
+    dv, g, date: document.getElementById('mdate').value, norm
+  };
+
+  document.getElementById('r-height').textContent = cur.best+' cm';
+  document.getElementById('r-power').textContent = ppRel ? ppRel+' W/kg' : '—';
+  document.getElementById('r-dev').textContent = dv;
+  document.getElementById('r-grade').innerHTML = `<span class="badge ${g}">${g}</span>`;
+
+  // 試技チャート
+  if(tChart) tChart.destroy();
+  tChart = new Chart(document.getElementById('trialChart'),{
+    type:'bar',
+    data:{
+      labels: cur.trials.map((_,i)=>'試技'+(i+1)),
+      datasets:[{
+        label:'跳躍高(cm)',
+        data: cur.trials,
+        backgroundColor: cur.trials.map(v=>v===cur.best?'#00B4D8':'#7ecce0'),
+        borderRadius:6
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false,title:{display:true,text:'跳躍高 (cm)'}}}}
+  });
+
+  // 評価表
+  const rows = [
+    ['最高跳躍高', cur.best+' cm', dev(cur.best,norm.mean,norm.sd)],
+    ...(ppRel?[['推定相対パワー', ppRel+' W/kg', dev(ppRel,norm.pMean,norm.pSd)]]:[]),
+    ...(bw?[['体重', bw+' kg', null]]:[])
+  ];
+  document.getElementById('eval-tbody').innerHTML = rows.map(([l,v,d])=>{
+    const bg=d?grd(d):''; const badge=d?`<span class="badge ${bg}" style="font-size:.8em">${bg}</span>`:'—';
+    return `<tr><td style="text-align:left">${l}</td><td>${v}</td><td>${d??'—'}</td><td>${badge}</td></tr>`;
+  }).join('');
+
+  // 個票
+  document.getElementById('report-wrap').innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <h3>📋 個人測定票 — CMJ</h3>
+      <table><tbody>
+        <tr><td style="text-align:left;font-weight:bold">選手名</td><td>${cur.name}</td><td style="text-align:left;font-weight:bold">ID</td><td>${cur.id}</td></tr>
+        <tr><td style="text-align:left;font-weight:bold">学年</td><td>${cur.grade}</td><td style="text-align:left;font-weight:bold">性別</td><td>${cur.gender==='m'?'男性':'女性'}</td></tr>
+        <tr><td style="text-align:left;font-weight:bold">体重</td><td>${bw??'—'} kg</td><td style="text-align:left;font-weight:bold">測定日</td><td>${cur.date||'—'}</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card">
+      <h3>📊 結果サマリー</h3>
+      <div class="metrics">
+        <div class="mbox"><div class="val" style="color:var(--accent)">${cur.best} cm</div><div class="lbl">最高跳躍高</div></div>
+        <div class="mbox"><div class="val" style="color:var(--teal)">${ppRel??'—'} W/kg</div><div class="lbl">推定相対パワー</div></div>
+        <div class="mbox"><div class="val" style="color:${gc(g)}">${dv}</div><div class="lbl">偏差値</div></div>
+        <div class="mbox"><div class="val"><span class="badge ${g}">${g}</span></div><div class="lbl">評価</div></div>
+      </div>
+    </div>`;
+
+  document.getElementById('cur-name').textContent = cur.name+' ('+cur.best+' cm)';
+  document.getElementById('add-btn').disabled = false;
+
+  // 個票にボタンを追加
+  document.getElementById('report-wrap').innerHTML += `
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn-print" onclick="printReport()">🖨 印刷 / PDF保存</button>
+      <button class="btn-csv" onclick="downloadCSV()">📥 個人CSVダウンロード</button>
+    </div>`;
+}
+
+function printReport(){
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-report').classList.add('active');
+  document.querySelectorAll('.tab-btn')[1].classList.add('active');
+  setTimeout(()=>window.print(), 150);
+}
+
+function downloadCSV(){
+  if(!cur) return;
+  const h = ['選手名','ID','学年','性別','体重(kg)','測定日','最高跳躍高(cm)','推定相対パワー(W/kg)','偏差値','評価'];
+  const r = [cur.name,cur.id,cur.grade,cur.gender==='m'?'男性':'女性',cur.bw??'',cur.date,cur.best,cur.ppRel??'',cur.dv,cur.g];
+  const csv = [h,r].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
+  _dlCSV(csv, `CMJ_${cur.name}_${cur.date||'nodate'}.csv`);
+}
+
+function downloadGroupCSV(){
+  if(!group.length){ alert('グループにデータがありません'); return; }
+  const h = ['選手名','ID','学年','性別','体重(kg)','測定日','最高跳躍高(cm)','推定相対パワー(W/kg)','偏差値','評価'];
+  const rows = group.map(r=>[r.name,r.id,r.grade,r.gender==='m'?'男性':'女性',r.bw??'',r.date,r.best,r.ppRel??'',r.dv,r.g]);
+  const csv = [h,...rows].map(row=>row.map(v=>`"${v}"`).join(',')).join('\n');
+  _dlCSV(csv, `CMJ_group_${new Date().toISOString().split('T')[0]}.csv`);
+}
+
+function _dlCSV(csv, filename){
+  const blob = new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function addGroup(){
+  if(!cur) return;
+  group.push({...cur});
+  renderGroup();
+}
+function clearGroup(){
+  group=[];
+  document.getElementById('g-tbody').innerHTML='';
+  if(gChart){gChart.destroy();gChart=null;}
+}
+function renderGroup(){
+  document.getElementById('g-tbody').innerHTML = group.map(r=>`
+    <tr><td style="text-align:left">${r.name}</td><td>${r.best}</td><td>${r.ppRel??'—'}</td><td>${r.dv}</td>
+    <td><span class="badge ${r.g}" style="font-size:.8em">${r.g}</span></td></tr>`).join('');
+  if(gChart) gChart.destroy();
+  gChart = new Chart(document.getElementById('groupChart'),{
+    type:'bar',
+    data:{
+      labels: group.map(r=>r.name),
+      datasets:[{
+        label:'跳躍高(cm)',
+        data: group.map(r=>r.best),
+        backgroundColor: group.map(r=>gc(r.g)+'cc'),
+        borderRadius:6
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:false,title:{display:true,text:'跳躍高 (cm)'}}}}
+  });
+}
+
+document.getElementById('mdate').value = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
