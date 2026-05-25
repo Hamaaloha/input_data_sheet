@@ -218,6 +218,7 @@ const SHEETS = {
 };
 
 const ROWS = 25;
+const NUMERIC_TYPES = new Set(['num','stime','mdist','dec1']); // OCR対象の数値型
 let pdfDoc=null, pageNum=1, zoom=1.2, ocrPreviewData=[];
 
 // ===== テーブル =====
@@ -326,11 +327,19 @@ function loadFile(input){
   } else {
     pdfDoc=null;
     document.getElementById('pdfCanvas').style.display='none';
-    const img=document.getElementById('imgView');
-    img.style.display='block';
-    img.src=URL.createObjectURL(file);
-    document.getElementById('pageInfo').textContent='画像表示中';
+    loadImageBlob(URL.createObjectURL(file), file.name);
   }
+}
+
+// Blob URL から画像を表示（ファイル選択・クリップボード共通）
+function loadImageBlob(blobUrl, label){
+  const img=document.getElementById('imgView');
+  img.style.display='block'; img.style.maxWidth=''; img.style.width='';
+  img.src=blobUrl;
+  document.getElementById('pdfPlaceholder').style.display='none';
+  document.getElementById('pageInfo').textContent='画像表示中';
+  document.getElementById('fileStatus').textContent=label||'貼り付け画像';
+  zoom=1.2;
 }
 
 function renderPage(){
@@ -592,7 +601,7 @@ function loadScript(src){
 
 function parseOCRLines(lines){
   const type=document.getElementById('sheetType').value;
-  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  const numCols=SHEETS[type].cols.filter(c=>NUMERIC_TYPES.has(c.t));
   const expected=numCols.length;
   const results=[];
 
@@ -628,7 +637,7 @@ function parseOCRLines(lines){
 
 function showOCRPreview(parsed){
   const type=document.getElementById('sheetType').value;
-  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  const numCols=SHEETS[type].cols.filter(c=>NUMERIC_TYPES.has(c.t));
   ocrPreviewData=parsed;
 
   // ヘッダー
@@ -651,7 +660,7 @@ function showOCRPreview(parsed){
 
 function applyOCRResult(){
   const type=document.getElementById('sheetType').value;
-  const numCols=SHEETS[type].cols.filter(c=>c.t==='num');
+  const numCols=SHEETS[type].cols.filter(c=>NUMERIC_TYPES.has(c.t));
   ocrPreviewData.forEach(r=>{
     numCols.forEach((col,i)=>{
       if(r.nums[i]!==undefined){
@@ -845,8 +854,21 @@ function _dl(content,filename,mime){
 // ===== 初期化 =====
 document.getElementById('measDate').value=new Date().toISOString().split('T')[0];
 buildTable('sprint30');
-// テーブルへの一括ペーストリスナー（シート切替後も有効）
+// テーブルへの一括ペーストリスナー
 document.getElementById('dataTable').addEventListener('paste', handleTablePaste);
+
+// クリップボードからの画像ペースト（スマホ写真の長押しコピーにも対応）
+document.addEventListener('paste', e=>{
+  // データテーブルへの入力中は無視
+  if(document.activeElement.closest('#dataTable')) return;
+  const items=Array.from(e.clipboardData?.items||[]);
+  const imgItem=items.find(it=>it.type.startsWith('image/'));
+  if(!imgItem) return;
+  e.preventDefault();
+  pdfDoc=null;
+  document.getElementById('pdfCanvas').style.display='none';
+  loadImageBlob(URL.createObjectURL(imgItem.getAsFile()), '貼り付け画像');
+});
 </script>
 </body>
 </html>
