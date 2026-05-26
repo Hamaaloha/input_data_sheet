@@ -87,8 +87,8 @@ td.ocr-warn{background:#fff8e0!important;}
   </div>
   <div><label>測定日　</label><input type="date" id="measDate"></div>
   <div><label>測定者　</label><input type="text" id="measPerson" placeholder="氏名" style="width:90px"></div>
-  <button class="btn btn-navy" onclick="document.getElementById('fileInput').click()">📂 スキャンを開く</button>
-  <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none" onchange="loadFile(this)">
+  <button class="btn btn-navy" onclick="document.getElementById('fileInput').click()">📂 PDF・写真を開く</button>
+  <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.heic,.heif,.webp,.bmp,.gif" style="display:none" onchange="loadFile(this)">
   <span class="status-bar" id="fileStatus">ファイル未選択</span>
 </div>
 
@@ -224,7 +224,7 @@ const SHEETS = {
 
 const ROWS = 25;
 const NUMERIC_TYPES = new Set(['num','stime','mdist','dec1']); // OCR対象の数値型
-let pdfDoc=null, pageNum=1, zoom=1.2, ocrPreviewData=[];
+let pdfDoc=null, pageNum=1, zoom=1.2, ocrPreviewData=[], renderTask=null;
 
 // ===== テーブル =====
 function changeSheet(){ buildTable(document.getElementById('sheetType').value); }
@@ -317,21 +317,31 @@ function handleTablePaste(e){
 // ===== PDF / 画像 =====
 function loadFile(input){
   const file=input.files[0]; if(!file) return;
+  input.value=''; // リセット：同じファイルも再選択できるようにする
   document.getElementById('fileStatus').textContent=file.name;
   document.getElementById('pdfPlaceholder').style.display='none';
+
+  // 進行中のレンダリングをキャンセル
+  if(renderTask){ try{renderTask.cancel();}catch(e){} renderTask=null; }
+
   const ext=file.name.split('.').pop().toLowerCase();
   if(ext==='pdf'){
+    document.getElementById('imgView').style.display='none';
+    document.getElementById('pdfCanvas').style.display='none';
+    document.getElementById('pageInfo').textContent='読み込み中...';
     const fr=new FileReader();
     fr.onload=e=>{
       pdfjsLib.getDocument({data:e.target.result}).promise.then(pdf=>{
-        pdfDoc=pdf; pageNum=1; renderPage();
+        pdfDoc=pdf; pageNum=1; zoom=1.2; renderPage();
       });
     };
     fr.readAsArrayBuffer(file);
-    document.getElementById('imgView').style.display='none';
   } else {
     pdfDoc=null;
     document.getElementById('pdfCanvas').style.display='none';
+    // 古いBlobURLを解放
+    const img=document.getElementById('imgView');
+    if(img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
     loadImageBlob(URL.createObjectURL(file), file.name);
   }
 }
@@ -349,13 +359,17 @@ function loadImageBlob(blobUrl, label){
 
 function renderPage(){
   if(!pdfDoc) return;
+  const targetDoc=pdfDoc, targetPage=pageNum;
   pdfDoc.getPage(pageNum).then(page=>{
+    if(pdfDoc!==targetDoc || pageNum!==targetPage) return; // 切り替え後は破棄
     const vp=page.getViewport({scale:zoom});
     const canvas=document.getElementById('pdfCanvas');
     canvas.style.display='block';
     canvas.width=vp.width; canvas.height=vp.height;
-    page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
-    document.getElementById('pageInfo').textContent=`${pageNum}/${pdfDoc.numPages}ページ`;
+    if(renderTask){ try{renderTask.cancel();}catch(e){} }
+    renderTask=page.render({canvasContext:canvas.getContext('2d'),viewport:vp});
+    renderTask.promise.then(()=>{renderTask=null;}).catch(()=>{});
+    document.getElementById('pageInfo').textContent=`${targetPage}/${pdfDoc.numPages}ページ`;
   });
 }
 function changePage(d){ if(!pdfDoc) return; const n=pageNum+d; if(n<1||n>pdfDoc.numPages) return; pageNum=n; renderPage();}
