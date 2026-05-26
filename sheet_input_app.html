@@ -315,7 +315,7 @@ function handleTablePaste(e){
 }
 
 // ===== PDF / 画像 =====
-function loadFile(input){
+async function loadFile(input){
   const file=input.files[0]; if(!file) return;
   input.value=''; // リセット：同じファイルも再選択できるようにする
   document.getElementById('fileStatus').textContent=file.name;
@@ -325,6 +325,28 @@ function loadFile(input){
   if(renderTask){ try{renderTask.cancel();}catch(e){} renderTask=null; }
 
   const ext=file.name.split('.').pop().toLowerCase();
+
+  // HEIC/HEIF（iPhone標準形式）→ JPEGに変換してから表示
+  if(ext==='heic' || ext==='heif'){
+    pdfDoc=null;
+    document.getElementById('pdfCanvas').style.display='none';
+    document.getElementById('pageInfo').textContent='HEIC変換中...';
+    document.getElementById('fileStatus').textContent=file.name + ' (変換中...)';
+    try{
+      if(!window.heic2any) await loadScript('https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js');
+      const result = await heic2any({blob: file, toType:'image/jpeg', quality:0.85});
+      const blob = Array.isArray(result) ? result[0] : result;
+      const img=document.getElementById('imgView');
+      if(img.src && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+      loadImageBlob(URL.createObjectURL(blob), file.name);
+    }catch(e){
+      document.getElementById('pageInfo').textContent='—';
+      document.getElementById('fileStatus').textContent='変換失敗: '+file.name;
+      alert('HEIC画像の変換に失敗しました。\n'+e.message);
+    }
+    return;
+  }
+
   if(ext==='pdf'){
     document.getElementById('imgView').style.display='none';
     document.getElementById('pdfCanvas').style.display='none';
