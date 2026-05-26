@@ -22,7 +22,10 @@ header h1{font-size:1em;font-weight:700;}
 .btn-gray{background:#ddd;color:#333;} .btn-gray:hover{background:#ccc;}
 .btn-green{background:var(--green);color:#fff;} .btn-green:hover{background:#008c5a;}
 .layout{display:flex;height:calc(100vh - 108px);overflow:hidden;}
-.pdf-pane{width:400px;flex-shrink:0;border-right:2px solid #ddd;display:flex;flex-direction:column;background:#555;}
+.pdf-pane{width:400px;flex-shrink:0;display:flex;flex-direction:column;background:#555;}
+.resize-handle{width:5px;flex-shrink:0;background:#ddd;cursor:col-resize;transition:background .15s;position:relative;z-index:10;}
+.resize-handle:hover,.resize-handle.active{background:var(--accent);}
+.resize-handle::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:1px;height:40px;background:rgba(0,0,0,.2);border-radius:1px;}
 .pdf-toolbar{background:#333;color:#fff;padding:5px 8px;display:flex;gap:6px;align-items:center;font-size:.8em;flex-wrap:wrap;}
 .pdf-toolbar button{padding:2px 8px;background:#555;color:#fff;border:none;border-radius:3px;cursor:pointer;font-family:inherit;font-size:.88em;}
 .pdf-scroll{flex:1;overflow:auto;padding:8px;cursor:grab;user-select:none;}
@@ -109,6 +112,8 @@ td.ocr-warn{background:#fff8e0!important;}
       <div id="selRect" style="display:none;position:absolute;border:2px solid #00B4D8;background:rgba(0,180,216,0.12);pointer-events:none;box-sizing:border-box;z-index:20;"></div>
     </div>
   </div>
+
+  <div class="resize-handle" id="resizeHandle"></div>
 
   <!-- データ入力 -->
   <div class="data-pane">
@@ -849,6 +854,37 @@ function _dl(content,filename,mime){
     scroll.scrollLeft=offsetX*ratio-(e.clientX-rect.left);
     scroll.scrollTop =offsetY*ratio-(e.clientY-rect.top);
   },{passive:false});
+})();
+
+// ===== PDF ペインリサイズ =====
+(function(){
+  const handle = document.getElementById('resizeHandle');
+  const pdfPane = document.querySelector('.pdf-pane');
+  let dragging = false, startX, startW;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startW = pdfPane.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const w = Math.max(160, Math.min(window.innerWidth * 0.75, startW + (e.clientX - startX)));
+    pdfPane.style.width = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('active');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+  // ダブルクリックでデフォルト幅に戻す
+  handle.addEventListener('dblclick', () => { pdfPane.style.width = '400px'; });
 })();
 
 // ===== 初期化 =====
